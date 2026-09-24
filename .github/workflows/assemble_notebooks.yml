@@ -1,0 +1,30 @@
+name: Assemble notebooks
+
+on:
+  push:
+    paths:
+      - ".parts/READY"
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble notebook files
+        shell: bash
+        run: |
+          cat .parts/main.001 .parts/main.002 .parts/main.003 > RETINA_ND_bioRxiv_release.ipynb
+          cat .parts/fresh.001 .parts/fresh.002 .parts/fresh.003 > RETINA_ND_bioRxiv_release_FRESH_TEST.ipynb
+          python -m json.tool RETINA_ND_bioRxiv_release.ipynb > /dev/null
+          python -m json.tool RETINA_ND_bioRxiv_release_FRESH_TEST.ipynb > /dev/null
+          rm -rf .parts
+          rm -f .upload_main.part
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Assemble analysis notebooks"
+          git push
