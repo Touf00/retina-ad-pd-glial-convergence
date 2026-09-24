@@ -1,0 +1,24 @@
+name: Re-publish v1.0.0 for Zenodo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/retrigger-zenodo-release.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  republish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-publish existing v1.0.0 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release view v1.0.0 >/dev/null
+          gh release delete v1.0.0 --yes
+          gh release create v1.0.0             --verify-tag             --title "RETINA-ND code release v1.0.0"             --notes "Archival code release accompanying the manuscript 'Glial transcriptomic convergence in Alzheimer’s and Parkinson’s disease with independent retinal and aqueous-humor evidence'. This release provides the analysis notebooks, reproducibility helpers, dependency record, citation metadata, and release manifest. No analysis notebook was re-executed for this archival publication."
