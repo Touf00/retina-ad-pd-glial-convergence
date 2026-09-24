@@ -1,0 +1,20 @@
+{
+  "source_notebook": "RETINA_ND_RECOVERY_MASTER_V2(1).ipynb",
+  "source_size_bytes": 10499104,
+  "release_notebook": "RETINA_ND_bioRxiv_release.ipynb",
+  "release_size_bytes": 2552217,
+  "release_code_cells": 75,
+  "embedded_outputs": 0,
+  "static_compile_failures": [],
+  "removed_duplicate_or_obsolete_source_cells": [0,1,2,4,6,7,27,35,43,53,55,60,61,62,65,69,73,74,82,83,84,85,86,88,89,90,91,97,98],
+  "fresh_test_notebook": "RETINA_ND_bioRxiv_release_FRESH_TEST.ipynb",
+  "archival_release_version": "1.0.0",
+  "archival_release_date": "2026-09-24",
+  "archival_repository": "https://github.com/Touf00/retina-ad-pd-glial-convergence",
+  "archival_edit_scope": "Primary notebook first markdown cell updated for current manuscript title and accurate no-rerun archival status; all code cells preserved byte-for-byte at source-text level.",
+  "source_release_notebook_sha256_before_archival_metadata_edit": "7a30b5ee5ac402ef63600f0bf77345178dcefe44b9f9cacc59746f6ddd508988",
+  "release_notebook_sha256": "f25db84b052d5393da6524de3aba773bf7f13d6217b82877f70d142899b91271",
+  "fresh_test_notebook_sha256": "be31fbe2409994a66ce19217c92d76d045bd991abfcd3b1cce6e80f0d00ac48a",
+  "pre_submission_test_notebook_sha256": "13fe71d5787370cdc35566c06dc236d6fe73d2088932b0c0e9fe271e03ec1bb6",
+  "fresh_execution_performed_for_archival_release": false
+}
