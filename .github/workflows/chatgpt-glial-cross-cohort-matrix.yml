@@ -1,0 +1,103 @@
+name: ChatGPT full glial cross-cohort matrix
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-glial-cross-cohort-matrix.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pandas numpy scipy
+      - name: Download frozen artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/original /tmp/external
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/10864609217/zip" -o /tmp/orig.zip
+          unzip -q /tmp/orig.zip -d /tmp/original
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/10843939879/zip" -o /tmp/ext.zip
+          unzip -q /tmp/ext.zip -d /tmp/external
+          find /tmp/original -type f | sort
+          find /tmp/external -type f | sort | head -80
+      - name: Run 2x2 AD-PD glial matrix
+        shell: bash
+        run: |
+          cat > /tmp/matrix.py <<'PY'
+          from pathlib import Path
+          import json, numpy as np, pandas as pd
+          from scipy.stats import spearmanr
+          OUT=Path("/tmp/glial_matrix"); OUT.mkdir(exist_ok=True)
+          rng=np.random.default_rng(20260925)
+          classes=["Astro","Micro","OPC","Oligo"]
+          def one(root,name):
+              h=list(Path(root).rglob(name))
+              if len(h)!=1: raise RuntimeError((root,name,[str(x) for x in h]))
+              return h[0]
+          def uniq(df,gene,effect,cell=None):
+              x=df.copy()
+              if cell is not None:
+                  x=x[x["cell_type"].astype(str).eq(cell)].copy()
+              x=x[[gene,effect]].dropna().copy()
+              x[gene]=x[gene].astype(str).str.upper().str.strip()
+              x=x[~x[gene].isin(["","NAN","NONE"])]
+              x=x[~x[gene].duplicated(keep=False)]
+              return x.set_index(gene)[effect].astype(float)
+          ad0=pd.read_csv(one("/tmp/original","GSE174367_AD_DISCOVERY_ALL_EFFECTS_LONG_v1.csv.gz"),low_memory=False)
+          pd0=pd.read_csv(one("/tmp/original","GSE243639_PD_DISCOVERY_ALL_EFFECTS_LONG_v1.csv.gz"),low_memory=False)
+          orig_ad={ct:uniq(ad0,"gene_symbol","AD_vs_Control_log2FC",ct) for ct in classes}
+          orig_pd={ct:uniq(pd0,"gene_symbol","PD_vs_Control_log2FC",ct) for ct in classes}
+          ext_ad={ct:uniq(pd.read_csv(one("/tmp/external",f"GSE222494_{ct}_effects.csv.gz")),"gene","effect_log2cpm_ols") for ct in classes}
+          ext_pd={ct:uniq(pd.read_csv(one("/tmp/external",f"GSE329625_{ct}_effects.csv.gz")),"gene","effect_log2cpm_ols") for ct in classes}
+          cohorts={"AD174":orig_ad,"AD222":ext_ad,"PD243":orig_pd,"PD329":ext_pd}
+          rows=[]
+          for ad in ["AD174","AD222"]:
+            for pdn in ["PD243","PD329"]:
+              for ct in classes:
+                  m=pd.concat([cohorts[ad][ct].rename("AD"),cohorts[pdn][ct].rename("PD")],axis=1,join="inner").dropna()
+                  rho=float(spearmanr(m.AD,m.PD).statistic)
+                  agree=float((np.sign(m.AD)==np.sign(m.PD)).mean())
+                  arr=m.PD.to_numpy(); aa=m.AD.to_numpy()
+                  null=np.empty(10000)
+                  for i in range(10000): null[i]=spearmanr(aa,rng.permutation(arr)).statistic
+                  pp=float((1+(np.abs(null)>=abs(rho)).sum())/(10001))
+                  rows.append({"AD_cohort":ad,"PD_cohort":pdn,"cell_class":ct,"n_genes":len(m),"rho":rho,
+                               "sign_agreement":agree,"perm_p":pp})
+                  m.to_csv(OUT/f"{ad}__{pdn}__{ct}.csv.gz",compression="gzip")
+          res=pd.DataFrame(rows)
+          res.to_csv(OUT/"glial_cross_cohort_matrix.csv",index=False)
+          # summarize consistency by cell class across all four cohort pairings
+          summ=[]
+          for ct,g in res.groupby("cell_class"):
+              summ.append({"cell_class":ct,"n_pairings":len(g),"positive_pairings":int((g.rho>0).sum()),
+                           "median_rho":float(g.rho.median()),"min_rho":float(g.rho.min()),"max_rho":float(g.rho.max()),
+                           "pairings_perm_p_lt_0.05":int((g.perm_p<0.05).sum())})
+          summary=pd.DataFrame(summ)
+          summary.to_csv(OUT/"glial_cross_cohort_consistency_summary.csv",index=False)
+          print(res.to_string(index=False))
+          print("\nCONSISTENCY\n",summary.to_string(index=False))
+          PY
+          python /tmp/matrix.py | tee /tmp/glial_matrix.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: glial-cross-cohort-matrix
+          path: |
+            /tmp/glial_matrix/
+            /tmp/glial_matrix.log
+          retention-days: 7
