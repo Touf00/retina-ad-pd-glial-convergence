@@ -65,47 +65,42 @@ jobs:
             text="".join(cell["source"]).replace("/content/drive/MyDrive/RETINA_ND_V2",str(root))
 
             if marker=="RETINA-ND — STEP 26A1":
-              pre="# M. SEURAT-v3 HVG WITH PREDECLARED NUMERICAL FALLBACK"
-              inject=r'''# PRE-HVG RAW CHECKPOINT FOR NUMERICAL-DRIFT AUDIT
-sp.save_npz("/tmp/GSE157827_PREHVG_X.npz", adata.X.tocsr(), compressed=True)
-adata.obs[["donor_id","cell_uid"]].to_csv(
-    "/tmp/GSE157827_PREHVG_OBS.csv.gz", index=False, compression="gzip"
-)
-adata.var[["gene_id","gene_symbol"]].to_csv(
-    "/tmp/GSE157827_PREHVG_VAR.csv.gz", index=False, compression="gzip"
-)
-print("PREHVG_CHECKPOINT_SAVED", adata.shape)
+              NL=chr(10)
 
-# M. SEURAT-v3 HVG WITH PREDECLARED NUMERICAL FALLBACK'''
+              pre="# M. SEURAT-v3 HVG WITH PREDECLARED NUMERICAL FALLBACK"
+              inject=NL.join([
+                "# PRE-HVG RAW CHECKPOINT FOR NUMERICAL-DRIFT AUDIT",
+                'sp.save_npz("/tmp/GSE157827_PREHVG_X.npz", adata.X.tocsr(), compressed=True)',
+                'adata.obs[["donor_id","cell_uid"]].to_csv("/tmp/GSE157827_PREHVG_OBS.csv.gz", index=False, compression="gzip")',
+                'adata.var[["gene_id","gene_symbol"]].to_csv("/tmp/GSE157827_PREHVG_VAR.csv.gz", index=False, compression="gzip")',
+                'print("PREHVG_CHECKPOINT_SAVED", adata.shape)',
+                "",
+                "# M. SEURAT-v3 HVG WITH PREDECLARED NUMERICAL FALLBACK",
+              ])
               if pre not in text:
                 raise RuntimeError("pre-HVG injection point missing")
               text=text.replace(pre,inject,1)
 
-              pca_marker='''sc.tl.pca(
-    adata_hvg,'''.strip()
-              scaled_inject=r'''np.save(
-    "/tmp/GSE157827_SCALED_CURRENT_FIXED_CURRENT_HVG.npy",
-    np.asarray(adata_hvg.X, dtype=np.float32),
-    allow_pickle=False,
-)
-print("CURRENT_SCALED_MATRIX_SAVED", adata_hvg.X.shape)
-
-sc.tl.pca(
-    adata_hvg,'''.strip()
+              pca_marker=NL.join(["sc.tl.pca(","    adata_hvg,"])
+              scaled_inject=NL.join([
+                'np.save("/tmp/GSE157827_SCALED_CURRENT_FIXED_CURRENT_HVG.npy", np.asarray(adata_hvg.X, dtype=np.float32), allow_pickle=False)',
+                'print("CURRENT_SCALED_MATRIX_SAVED", adata_hvg.X.shape)',
+                "",
+                "sc.tl.pca(",
+                "    adata_hvg,",
+              ])
               if pca_marker not in text:
                 raise RuntimeError("PCA injection point missing")
               text=text.replace(pca_marker,scaled_inject,1)
 
-              harmony_marker="# ============================================================\n# Q. DONOR-ONLY HARMONY"
-              pca_inject=r'''np.save(
-    "/tmp/GSE157827_PCA50_CURRENT.npy",
-    np.asarray(adata_hvg.obsm["X_pca"], dtype=np.float64),
-    allow_pickle=False,
-)
-print("CURRENT_PCA50_SAVED", adata_hvg.obsm["X_pca"].shape)
-
-# ============================================================
-# Q. DONOR-ONLY HARMONY'''
+              harmony_marker=NL.join(["# ============================================================","# Q. DONOR-ONLY HARMONY"])
+              pca_inject=NL.join([
+                'np.save("/tmp/GSE157827_PCA50_CURRENT.npy", np.asarray(adata_hvg.obsm["X_pca"], dtype=np.float64), allow_pickle=False)',
+                'print("CURRENT_PCA50_SAVED", adata_hvg.obsm["X_pca"].shape)',
+                "",
+                "# ============================================================",
+                "# Q. DONOR-ONLY HARMONY",
+              ])
               if harmony_marker not in text:
                 raise RuntimeError("Harmony injection point missing")
               text=text.replace(harmony_marker,pca_inject,1)
