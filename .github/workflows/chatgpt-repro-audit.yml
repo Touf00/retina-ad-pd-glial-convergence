@@ -1,0 +1,147 @@
+name: ChatGPT clean-room reproducibility audit
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-repro-audit.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  clean-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Show runner resources
+        run: |
+          set -euxo pipefail
+          python --version
+          df -h
+          free -h
+
+      - name: Install analysis environment
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install nbconvert jupyter
+
+      - name: Prepare exact manual resources
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SRC="/content/drive/MyDrive/RETINA_ND_V2"
+          mkdir -p "$SRC/resources/pathways"
+          mkdir -p "$SRC/ocular_validation/Wolf_Cell_2023"
+          mkdir -p "$SRC/ocular_validation/PXD073336"
+
+          # Reactome release 97. Try the official versioned endpoint first.
+          rm -f /tmp/reactome.zip /tmp/ReactomePathways.gmt
+          for u in             "https://download.reactome.org/97/ReactomePathways.gmt.zip"             "https://reactome.org/download/archive/97/ReactomePathways.gmt.zip"
+          do
+            echo "Trying $u"
+            if curl -fL --retry 3 --connect-timeout 30 "$u" -o /tmp/reactome.zip; then
+              if unzip -p /tmp/reactome.zip > /tmp/ReactomePathways.gmt 2>/dev/null; then
+                got="$(sha256sum /tmp/ReactomePathways.gmt | awk '{print $1}')"
+                echo "Reactome SHA256=$got"
+                if [ "$got" = "89983d5c1f0af11c52edfeee7323eb425580ac6281d387a528562ab1787ce56b" ]; then
+                  cp /tmp/ReactomePathways.gmt "$SRC/resources/pathways/ReactomePathways_V97.gmt"
+                  break
+                fi
+              fi
+            fi
+          done
+          test -s "$SRC/resources/pathways/ReactomePathways_V97.gmt"
+
+          # Wolf et al. Cell 2023 Table S7. Try known PMC supplement paths.
+          OUT="$SRC/ocular_validation/Wolf_Cell_2023/NIHMS1931846-supplement-8.xlsx"
+          rm -f "$OUT" /tmp/wolf.xlsx
+          for u in             "https://pmc.ncbi.nlm.nih.gov/articles/PMC10720485/bin/NIHMS1931846-supplement-8.xlsx"             "https://pmc.ncbi.nlm.nih.gov/articles/instance/10720485/bin/NIHMS1931846-supplement-8.xlsx"
+          do
+            echo "Trying $u"
+            if curl -fL --retry 3 --connect-timeout 30 "$u" -o /tmp/wolf.xlsx; then
+              got="$(sha256sum /tmp/wolf.xlsx | awk '{print $1}')"
+              echo "Wolf SHA256=$got"
+              if [ "$got" = "edf47f225ab4b8e58ef79d2a910eeb5861f352c1e907ed84d9f71e3ec063c4f3" ]; then
+                cp /tmp/wolf.xlsx "$OUT"
+                break
+              fi
+            fi
+          done
+
+          # Fallback: download the PMC OA package and locate Table S7.
+          if [ ! -s "$OUT" ]; then
+            python - <<'PY'
+          import re, requests, pathlib, tarfile, shutil
+          from urllib.parse import urlparse
+          out = pathlib.Path("/content/drive/MyDrive/RETINA_ND_V2/ocular_validation/Wolf_Cell_2023/NIHMS1931846-supplement-8.xlsx")
+          xml = requests.get("https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi?id=PMC10720485", timeout=60).text
+          hrefs = re.findall(r'href="([^"]+)"', xml)
+          pkg = next((h for h in hrefs if h.endswith(".tar.gz") or ".tar.gz" in h), None)
+          if pkg is None:
+              raise RuntimeError("PMC OA package URL not found: " + xml[:1000])
+          if pkg.startswith("ftp://"):
+              pkg = "https://" + pkg[len("ftp://"):]
+          r = requests.get(pkg, timeout=180)
+          r.raise_for_status()
+          tgz = pathlib.Path("/tmp/pmc10720485.tar.gz")
+          tgz.write_bytes(r.content)
+          extract = pathlib.Path("/tmp/pmc10720485")
+          shutil.rmtree(extract, ignore_errors=True)
+          extract.mkdir()
+          with tarfile.open(tgz, "r:gz") as tf:
+              tf.extractall(extract)
+          candidates = list(extract.rglob("*supplement-8.xlsx")) + list(extract.rglob("mmc3.xlsx"))
+          if not candidates:
+              raise RuntimeError("Wolf Table S7 not found in PMC OA package")
+          shutil.copy2(candidates[0], out)
+          print("Copied", candidates[0], "->", out)
+          PY
+          fi
+
+          echo "edf47f225ab4b8e58ef79d2a910eeb5861f352c1e907ed84d9f71e3ec063c4f3  $OUT" | sha256sum -c -
+          ls -lh "$SRC/resources/pathways/ReactomePathways_V97.gmt" "$OUT"
+
+      - name: Execute fresh notebook end to end
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf /content/drive/MyDrive/RETINA_ND_RELEASE_TEST
+          mkdir -p /content/drive/MyDrive
+          jupyter nbconvert             --to notebook             --execute RETINA_ND_bioRxiv_release_FRESH_TEST.ipynb             --output /tmp/RETINA_ND_FRESH_EXECUTED.ipynb             --ExecutePreprocessor.timeout=18000             2>&1 | tee /tmp/retina_execution.log
+
+      - name: Collect audit bundle
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p /tmp/audit_bundle
+          cp /tmp/retina_execution.log /tmp/audit_bundle/ 2>/dev/null || true
+          cp /tmp/RETINA_ND_FRESH_EXECUTED.ipynb /tmp/audit_bundle/ 2>/dev/null || true
+          ROOT="/content/drive/MyDrive/RETINA_ND_RELEASE_TEST"
+          for f in             "$ROOT/release_environment_snapshot.json"             "$ROOT/results/RETINA-ND_FINAL_CORE_BRAIN_DE_QC_v1.csv"             "$ROOT/results/RETINA-ND_FINAL_FIGURE_ARTIFACT_QC_v1.csv"             "$ROOT/results/RETINA-ND_FINAL_NOTEBOOK_QC_SUMMARY_v1.json"             "$ROOT/results/AD_PD_CONVERGENCE_SUMMARY_v2.csv"             "$ROOT/results/AD_PD_REACTOME_R3_RECURRENCE_NULL_AUDIT_v1.csv"             "$ROOT/results/RETINA_ND_UNIQUE_GENE_CANDIDATE_RANKING_v4.csv"
+          do
+            [ -f "$f" ] && cp "$f" /tmp/audit_bundle/
+          done
+          find "$ROOT/logs" -maxdepth 1 -type f -size -5M -exec cp {} /tmp/audit_bundle/ \; 2>/dev/null || true
+          df -h > /tmp/audit_bundle/disk_final.txt
+          free -h > /tmp/audit_bundle/memory_final.txt
+          ls -lah /tmp/audit_bundle
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retina-nd-clean-room-audit
+          path: /tmp/audit_bundle/
+          if-no-files-found: warn
+          retention-days: 7
