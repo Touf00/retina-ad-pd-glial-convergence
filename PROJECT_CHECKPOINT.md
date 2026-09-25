@@ -1,11 +1,13 @@
-### GSE157827 historical-like Python 3.13 environment — RESULT RECOVERED; EXTRACTION FIX RELAUNCHED
+### GSE157827 historical-like Python 3.13 environment — 29/31 CROSS-RUN DRIFT CONFIRMED
 - Run 36169236711 completed the focused STEP26A1 notebook successfully under Python 3.13.15, numpy 2.1.3, pandas 2.3.3, scipy 1.16.3, anndata 0.13.3.post0, scanpy 1.12.4, scikit-learn 1.6.1, harmonypy 2.0.0, igraph 1.0.0, and leidenalg 0.12.0.
 - The workflow failed only in the result-extraction step because it looked for the STEP26A1 lock in `annotation_provisional`; the notebook writes that lock to the top-level `locks` directory.
 - Artifact 10879377749 was uploaded despite the extraction failure. Direct inspection of its cluster assignments recovered 169,506 cells and 29 clusters, with labels 0 through 28.
-- Therefore the historical-like Python 3.13 environment does NOT restore the archival 28-cluster result. It independently reproduces the recent 29-cluster focused rebuild.
-- The workflow was patched only to read and collect the lock from its actual path. A relaunch will verify the structured result and preserve the lock metadata; no analysis parameters were changed.
+- The workflow was patched only to read and collect the lock from its actual path; no analysis parameters were changed. Verification run 36172862812 completed successfully but produced 31 clusters with HVG LOESS span 0.5. Artifact: 10881183724, expires 2026-10-02 18:26:05 UTC.
+- Therefore the historical-like Python 3.13 environment does NOT restore the archival 28-cluster result. More importantly, the same code, explicit package versions, seed, and nominal GitHub runner produced 29 and then 31 clusters across two fresh runs.
+- The earlier 31-cluster and 29-cluster Python 3.12 focused workflows also installed the same complete dependency set. Package drift is therefore ruled out as the explanation for the 29-vs-31 split.
+- This localizes the remaining instability to lower-level numerical/runtime state before the already-fixed Harmony-to-Leiden comparison, with parallel BLAS/OpenMP scheduling the shortest remaining falsifiable hypothesis.
 - The relaunch artifact is privacy-minimized: it publishes only the aggregate result JSON and non-cell-level lock metadata, not cell-level assignments, the HVG list, or execution logs.
-- Next controlled question after verification: determine why nominally similar focused reconstructions have produced 29 versus 31, then document whether the archival 28 can be localized beyond an unarchived numerical/runtime state.
+- Next controlled test: two independent exact reruns with all common numerical thread pools capped at one, recording only aggregate counts and SHA-256 hashes. If both match, compare their hashes with the default-thread locks; if they diverge, document an irreducible hosted-runner numerical-state limitation.
 
 ### GSE157827 HVG / normalization / PCA localization — COMPLETED
 - Run 36166577734 completed successfully.
