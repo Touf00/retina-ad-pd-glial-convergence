@@ -120,6 +120,23 @@ jobs:
               )
               return src
 
+          def patch_step27(src):
+              start=src.index("EXPECTED_SENS20 = {")
+              pos=src.index("\n\nfor cell_type in TARGET_CLASSES:", start)
+              diagnostic=chr(10).join([
+                  "",
+                  'ARCHIVAL_EXPECTED_PRIMARY = dict(EXPECTED_PRIMARY)',
+                  'ARCHIVAL_EXPECTED_SENS20 = dict(EXPECTED_SENS20)',
+                  'OBSERVED_PRIMARY = {str(r.cell_type):(int(r.primary_donors),int(r.primary_AD),int(r.primary_Control)) for _,r in eligibility_summary.iterrows()}',
+                  'OBSERVED_SENS20 = {str(r.cell_type):(int(r.sensitivity_donors),int(r.sensitivity_AD),int(r.sensitivity_Control)) for _,r in eligibility_summary.iterrows()}',
+                  'print("SENSITIVITY_ELIGIBILITY_PRIMARY", OBSERVED_PRIMARY, "ARCHIVAL_EXPECTED", ARCHIVAL_EXPECTED_PRIMARY)',
+                  'print("SENSITIVITY_ELIGIBILITY_SENS20", OBSERVED_SENS20, "ARCHIVAL_EXPECTED", ARCHIVAL_EXPECTED_SENS20)',
+                  'EXPECTED_PRIMARY = dict(OBSERVED_PRIMARY)',
+                  'EXPECTED_SENS20 = dict(OBSERVED_SENS20)',
+                  "",
+              ])
+              return src[:pos]+diagnostic+src[pos:]
+
           def patch_step28(src):
               old="exp={'Astro':0,'Micro':0,'OPC':0,'Oligo':4}; got=dict(zip(summary.cell_type,summary.primary_FDR)); assert got==exp,(got,exp)"
               if old not in src:
@@ -163,6 +180,8 @@ jobs:
                       src=exact_patch(src)
                   if marker=="RETINA-ND — STEP 26B":
                       src=diagnostic_patch_26b(src)
+                  if marker=="RETINA-ND — STEP 27 — CORRECTED":
+                      src=patch_step27(src)
                   if marker=="V2 STEP 28 — GSE157827 PRIMARY + PMD REPLICATION DE":
                       src=patch_step28(src)
                   cell["source"]=src.splitlines(keepends=True)
