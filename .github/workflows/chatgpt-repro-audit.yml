@@ -113,12 +113,13 @@ jobs:
         run: |
           set -euxo pipefail
           BASE="/tmp/retina_drive/MyDrive"
-          mkdir -p "$BASE"
+          mkdir -p "$BASE" /tmp/content
           cp RETINA_ND_bioRxiv_release_FRESH_TEST.ipynb /tmp/RETINA_ND_FRESH_TEST_RUNNER.ipynb
           sed -i \
             -e "s#/content/drive/MyDrive/RETINA_ND_V2 (1)#$BASE/RETINA_ND_V2 (1)#g" \
             -e "s#/content/drive/MyDrive/RETINA_ND_V2#$BASE/RETINA_ND_V2#g" \
             -e "s#/content/drive/MyDrive/RETINA_ND_RELEASE_TEST#$BASE/RETINA_ND_RELEASE_TEST#g" \
+            -e "s#/content/#/tmp/content/#g" \
             /tmp/RETINA_ND_FRESH_TEST_RUNNER.ipynb
           grep -o "$BASE/RETINA_ND[^\\\"]*" /tmp/RETINA_ND_FRESH_TEST_RUNNER.ipynb | head
 
