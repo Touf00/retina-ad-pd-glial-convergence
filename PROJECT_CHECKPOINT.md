@@ -2,6 +2,20 @@
 
 Updated: 2026-09-25
 Branch: `chatgpt-repro-audit`
+Checkpoint commit inspected: `4a98ef9`
+
+## Verified workflow state at handoff
+
+- GitHub Actions checked directly on 2026-09-25 after the checkpoint commit.
+- Active/queued workflows: **none**. The two jobs previously described as live have completed successfully.
+- Latest successful milestone runs:
+  - `36142383845` — full glial cross-cohort matrix; completed successfully.
+  - `36142316148` — corrected vascular convergence extension; completed successfully.
+  - `36136473933` — PXD040225 DEP extraction; completed successfully.
+  - `36087596027` — external-cohort pseudobulk; completed successfully.
+- Relevant unresolved failed runs:
+  - `36131301979` — clean-room audit failed during notebook execution at the GSE157827 31-vs-28 clustering assertion; audit artifact was still uploaded.
+  - `36135706446` — GSE157827 endothelial feasibility audit failed before producing an artifact. PNAS supplement URLs returned HTTP 403 or HTML, and the Europe PMC supplementary bundle request timed out. This is a source-retrieval failure, not a biological exclusion.
 
 ## Purpose
 
@@ -27,12 +41,14 @@ Original manuscript is already on bioRxiv; journal-version strengthening is in p
   - ITGAM independently detected as upregulated in AD retina.
   - ITGAM AD mean 79.11, NC mean 62.72, FC 1.26, p ~0.03222.
 - Latest successful run: 36136473933.
+- Artifact: 10865201485; expires 2026-10-02 12:43:55 UTC.
 
 ### Extra brain cohorts
 Completed donor-level pseudobulk/effect-vector analysis for:
 - GSE222494: sporadic AD vs controls; Astro, Micro, OPC, Oligo, Endothelial, Pericyte.
 - GSE329625: PD vs controls; Astro, Micro, OPC, Oligo.
-- Artifact from external-cohort analysis: 10843939879 (temporary GitHub artifact; expiry 2026-10-02).
+- Run: 36087596027.
+- Artifact from external-cohort analysis: 10843939879; expires 2026-10-02 03:12:00 UTC.
 
 ### Full 2x2 glial cross-cohort matrix
 Completed 16 AD x PD comparisons:
@@ -78,7 +94,7 @@ Interpretation:
 - PD329 attenuates/reverses several effects.
 - The journal version should frame convergence as cohort/region/context-dependent rather than universal.
 - Successful run: 36142383845.
-- Artifact: 10868790506 (temporary; expiry about 7 days from run).
+- Artifact: 10868790506; expires 2026-10-02 13:48:32 UTC.
 
 ### Vascular extension
 Corrected GSE157783 Ensembl release 93 mapping to unambiguous gene symbols and reran.
@@ -119,7 +135,9 @@ Interpretation:
 - Cross-disease endothelial/pericyte correlations are mostly positive but donor-bootstrap intervals cross zero.
 - Treat vascular convergence as suggestive/context-dependent, not definitive.
 - Successful run: 36142316148.
-- Artifact: 10867267704.
+- Artifact: 10867267704; expires 2026-10-02 13:44:06 UTC.
+- Upstream corrected PD-vascular pseudobulk run: 36140417739.
+- Upstream artifact: 10865839087; expires 2026-10-02 13:22:10 UTC.
 
 ### GSE243639 vascular identity
 - Author `VC` population was audited diagnosis-blind.
@@ -141,8 +159,12 @@ Blocking issue:
 - Subsequent frozen exact-count / low-margin mapping assertions stop the clean-room notebook.
 - This is an environment/version reproducibility drift, not a storage problem and not evidence that all code is broken.
 - Do NOT simply remove biological assertions to manufacture a pass.
-- Clean-room artifact: 10864609217.
+- Clean-room artifact: 10864609217; expires 2026-10-02 13:02:32 UTC.
 - Most recent clean-room run: 36131301979.
+
+### Independent-pair donor bootstrap artifact
+- Successful run: 36135599890.
+- Artifact: 10863442549; expires 2026-10-02 12:35:54 UTC.
 
 ## Still unresolved / next actions
 
@@ -153,6 +175,7 @@ Blocking issue:
    - Then continue full clean-room notebook to the end.
 
 2. Complete GSE157827 vascular decision.
+   - First make supplement retrieval deterministic (vendor/Europe PMC URLs currently fail or time out in Actions), or recover the same author QC table from a verified alternate public source.
    - Establish whether author Endo cells are sufficiently represented for donor-level AD endothelial analysis.
    - Pericytes are not clearly author-annotated in the available GSE157827 QC.
    - If robust extraction is not possible, explicitly exclude this cohort from the vascular extension.
@@ -205,3 +228,4 @@ After every major milestone, update this file with:
 - exact result;
 - exact failure if any;
 - next action.
+
