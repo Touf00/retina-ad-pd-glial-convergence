@@ -77,7 +77,7 @@ jobs:
               if marker=="RETINA-ND — STEP 26A1":
                   start=src.index("sc.pp.neighbors(")
                   end=src.index("\n\n\nsc.tl.leiden(",start)
-                  replacement="\\n".join([
+                  replacement=chr(10).join([
                       "from sklearn.neighbors import KNeighborsTransformer",
                       "",
                       "exact_transformer = KNeighborsTransformer(",
