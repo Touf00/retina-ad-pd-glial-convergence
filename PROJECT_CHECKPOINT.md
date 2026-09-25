@@ -1,3 +1,11 @@
+### GSE157827 fixed-Harmony downstream repeatability — kNN SEARCH IS THE FIRST DIVERGENCE
+- Run 36175179052 completed successfully with two independent jobs using the exact same frozen Harmony20 file (SHA-256 5fa4adc58581ab864546f274507e2010641d672dde3dda0e8d51e6e8b2553d95).
+- Replicate 1: distance-graph SHA-256 b9582c75ac35b2362a3cf711630e7a2c4b28f8626a5f3ab4d2b6aa3d8a169ee4; connectivity SHA-256 dba620f90fcf87a5037f39feb17e0c5d21bf900d92cda47ced64bb5fd311826d; 31 clusters.
+- Replicate 2: distance-graph SHA-256 087cf3a0bcb93aa2157d3fcd318419fad815eb73176785387444c74b7000cff8; connectivity SHA-256 897ce290316b060a25c703397de29f78d40632fea9e4b4b8c6336979d51e4257; 30 clusters.
+- Because the distance matrices already differ before Leiden, the first demonstrated source of cross-run nondeterminism is approximate k-nearest-neighbor graph construction, not PCA or Harmony.
+- All common numerical thread variables including NUMBA_NUM_THREADS were capped at one, but the default large-dataset Scanpy path still delegates to PyNNDescent without an explicitly supplied n_jobs=1 transformer.
+- Next controlled test: use the same frozen Harmony matrix and an explicit PyNNDescentTransformer with random_state=20260914 and n_jobs=1 in two independent jobs. If graph hashes match, the missing explicit PyNNDescent job cap explains the downstream drift. If they do not, treat PyNNDescent cross-process behavior as the unresolved source and freeze the neighbor graph or use a deterministic exact-neighbor backend for the reproducibility release.
+
 # RETINA-ND PROJECT CHECKPOINT
 
 Updated: 2026-09-25
