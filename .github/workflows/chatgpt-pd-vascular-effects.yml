@@ -94,7 +94,7 @@ jobs:
           # GEO gene TSV has one header-like row in addition to expression rows. Rerun after explicit alignment fix.
           # Detect and remove only if the content is explicitly header-like.
           first=" | ".join(genes_tbl.iloc[0].fillna("").astype(str).tolist()).lower()
-          if any(k in first for k in ["gene_id","gene id","gene_name","gene name","symbol"]) or first.strip()=="row" or first.startswith("row |"):
+          if "row" in [str(x).strip().lower() for x in genes_tbl.iloc[0].tolist()] or any(k in first for k in ["gene_id","gene id","gene_name","gene name","symbol"]):
             print("Dropping detected gene-table header row:", genes_tbl.iloc[0].tolist())
             genes_tbl=genes_tbl.iloc[1:].reset_index(drop=True)
           if genes_tbl.shape[1]>=2:
