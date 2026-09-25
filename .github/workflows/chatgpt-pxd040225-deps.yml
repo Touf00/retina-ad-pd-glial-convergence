@@ -48,7 +48,7 @@ jobs:
 
           # Canonical UniProt accessions plus 10-character UniParc/TrEMBL-style
           # accessions (e.g. A0A0C4DH72) present in these tables.
-          accession=re.compile(r"(?<![A-Za-z0-9])((?:A0A[A-Z0-9]{7}|[A-NR-Z][0-9][A-Z0-9]{3}[0-9]|[OPQ][0-9][A-Z0-9]{3}[0-9])(?:-[0-9]+)?)(?=\s)")
+          accession=re.compile(r"(?m)^([A-Z0-9]{6,10}(?:-[0-9]+)?)\s+")
           def parse_section(n,direction):
               a=starts[n]; b=starts.get(n+1,len(pages))
               txt="\n".join(pages[a:b])
