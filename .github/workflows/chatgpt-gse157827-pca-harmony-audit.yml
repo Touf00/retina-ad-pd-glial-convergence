@@ -12,6 +12,8 @@ permissions:
 jobs:
   pca-harmony-audit:
     runs-on: ubuntu-latest
+    env:
+      RETINA_ND_ROOT: /tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
