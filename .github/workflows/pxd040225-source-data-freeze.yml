@@ -1,0 +1,118 @@
+name: Freeze independent AD-retina source data
+
+on:
+  push:
+    branches: [reproducibility-audit]
+    paths:
+      - ".github/workflows/pxd040225-source-data-freeze.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  freeze-pxd040225:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: reproducibility-audit
+
+      - name: Download PXD040225 extraction artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: pxd040225-dep-extraction
+          path: /tmp/pxd040225
+          run-id: 36136473933
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Preserve exact generated outputs
+        run: |
+          set -euo pipefail
+          rm -rf publication/source_data/pxd040225_ad_retina
+          mkdir -p publication/source_data/pxd040225_ad_retina
+          cp /tmp/pxd040225/PXD040225_manuscript_candidate_overlap.csv publication/source_data/pxd040225_ad_retina/
+          cp /tmp/pxd040225/PXD040225_retina_DEPs_extracted.csv publication/source_data/pxd040225_ad_retina/
+          cp /tmp/pxd040225/summary.json publication/source_data/pxd040225_ad_retina/
+
+      - name: Install verification dependency
+        run: python -m pip install pandas==2.3.3
+
+      - name: Verify frozen independent-retina values
+        run: |
+          python - <<'PY'
+          import json, math
+          from pathlib import Path
+          import pandas as pd
+
+          root=Path("publication/source_data/pxd040225_ad_retina")
+          overlap=pd.read_csv(root/"PXD040225_manuscript_candidate_overlap.csv")
+          deps=pd.read_csv(root/"PXD040225_retina_DEPs_extracted.csv")
+          summary=json.loads((root/"summary.json").read_text())
+
+          expected_candidates={"SCAMP5","XYLB","RABEPK","ITGAM","CD38","CTCF","UBTD2","NAPEPLD"}
+          assert set(overlap.gene)==expected_candidates
+          present=overlap.loc[overlap.accession.notna()].copy()
+          assert len(present)==1
+          r=present.iloc[0]
+          assert r.gene=="ITGAM" and r.accession=="P11215"
+          assert math.isclose(float(r.AD_mean),79.11,abs_tol=1e-12)
+          assert math.isclose(float(r.NC_mean),62.72,abs_tol=1e-12)
+          assert math.isclose(float(r.FC_AD_over_NC),1.26,abs_tol=1e-12)
+          assert math.isclose(float(r.p_value),0.03222,abs_tol=1e-12)
+          assert r.direction=="up"
+          assert math.isclose(float(r.log2FC_signed),0.3334237337251918,abs_tol=1e-12)
+
+          assert int(summary["table4_up_n"])==423
+          assert int(summary["table5_down_n"])==422
+          assert int(summary["total_unique_gene_n"])==844
+          assert int(summary["expected_published_total_retina_DEPs"])==886
+          assert summary["extraction_complete_vs_published_total"] is False
+
+          assert len(deps)==845
+          assert deps.gene.nunique()==844
+          it=deps.loc[deps.gene.astype(str).str.upper()=="ITGAM"]
+          assert len(it)==1
+          assert it.iloc[0].direction=="up"
+          assert math.isclose(float(it.iloc[0].p_value),0.03222,abs_tol=1e-12)
+
+          print("PXD040225_SOURCE_DATA_FREEZE_VERIFIED",len(deps),"DEP rows",deps.gene.nunique(),"unique genes","candidate hit",r.gene)
+          PY
+
+      - name: Write provenance and refresh checksums
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          p=Path("publication/source_data/pxd040225_ad_retina")
+          (p/"README.md").write_text("\n".join([
+              "# Independent human AD-retina sensitivity source data",
+              "",
+              "Exact generated outputs from workflow run 36136473933, artifact 10865201485.",
+              "Artifact digest: sha256:e5c88211d1f0d12d2c9fd7f34eba8a48a49017a99e92c51d0ce0d0f891699356.",
+              "",
+              "The extraction contains 423 Table-4 up rows and 422 Table-5 down rows, representing 844 unique genes. The source paper reports 886 retinal DEPs overall, so this table extraction is explicitly not treated as a complete reconstruction of every published retinal DEP.",
+              "",
+              "Among the eight prespecified manuscript candidates, only ITGAM is present in these extracted significant-DEP tables: P11215, AD mean 79.11, control mean 62.72, AD/control fold change 1.26, P=0.03222, signed log2 fold change +0.333424.",
+              "",
+              "This is nominal independent human AD-retina support for ITGAM, not FDR biomarker validation.",
+              "",
+          ]))
+
+          root=Path("publication/source_data")
+          files=sorted(x for x in root.rglob("*") if x.is_file() and x.name!="SHA256SUMS.txt")
+          lines=[]
+          for x in files:
+              lines.append(f"{hashlib.sha256(x.read_bytes()).hexdigest()}  {x.relative_to(root).as_posix()}")
+          (root/"SHA256SUMS.txt").write_text("\n".join(lines)+"\n")
+          PY
+
+      - name: Commit independent AD-retina source data
+        run: |
+          set -euo pipefail
+          git config user.name "publication-data-freeze"
+          git config user.email "actions@users.noreply.github.com"
+          git add publication/source_data
+          git commit -m "Freeze independent AD-retina publication source data"
+          git push origin HEAD:reproducibility-audit
