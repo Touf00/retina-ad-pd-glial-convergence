@@ -1,0 +1,79 @@
+name: ChatGPT GSE157827 endothelial feasibility
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-gse157827-endo-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pandas openpyxl requests
+      - name: Audit author endothelial coverage
+        run: |
+          python - <<'PY'
+          import requests,pandas as pd,json
+          from pathlib import Path
+          out=Path("/tmp/gse157827_endo"); out.mkdir(exist_ok=True)
+          urls=[
+            "https://www.pnas.org/doi/suppl/10.1073/pnas.2008762117/suppl_file/pnas.2008762117.sd01.xlsx",
+            "https://www.pnas.org/action/downloadSupplement?doi=10.1073%2Fpnas.2008762117&file=pnas.2008762117.sd01.xlsx",
+            "https://pmc.ncbi.nlm.nih.gov/articles/PMC7519289/bin/pnas.2008762117.sd01.xlsx"
+          ]
+          p=out/"pnas.2008762117.sd01.xlsx"
+          for u in urls:
+            try:
+              r=requests.get(u,timeout=60,allow_redirects=True)
+              print(u,r.status_code,r.headers.get("content-type"),len(r.content))
+              if r.ok and len(r.content)>10000 and r.content[:2]==b"PK":
+                p.write_bytes(r.content); break
+            except Exception as e: print("ERR",u,e)
+          if not p.exists(): raise RuntimeError("Could not fetch sd01.xlsx")
+          pat=pd.read_excel(p,sheet_name="Patient_info",dtype=object)
+          qc=pd.read_excel(p,sheet_name="snRNAseq_QC",dtype=object)
+          pat.columns=[str(x).strip() for x in pat.columns]; qc.columns=[str(x).strip() for x in qc.columns]
+          qc["ID"]=qc["ID"].astype(str).str.strip()
+          pat["ID"]=pat["ID"].astype(str).str.strip()
+          qc=qc[qc.ID.ne("Mean")].copy()
+          # normalize conditions from source, do not infer beyond explicit labels
+          merged=qc.merge(pat,on="ID",how="left",validate="one_to_one")
+          for c in ["Number of nucleus","Proportion of Endo (%)"]:
+            merged[c]=pd.to_numeric(merged[c],errors="coerce")
+          merged["estimated_author_endo_nuclei"]=merged["Number of nucleus"]*merged["Proportion of Endo (%)"]/100.0
+          merged.to_csv(out/"GSE157827_author_endothelial_coverage.csv",index=False)
+          condcol="CONDITION" if "CONDITION" in merged else None
+          print("columns",merged.columns.tolist())
+          print(merged[["ID"]+([condcol] if condcol else [])+["Number of nucleus","Proportion of Endo (%)","estimated_author_endo_nuclei"]].to_string(index=False))
+          summary={"n_donors":int(len(merged))}
+          if condcol:
+            for dx,g in merged.groupby(condcol):
+              vals=g.estimated_author_endo_nuclei
+              summary[str(dx)]={
+                "n_donors":int(len(g)),
+                "n_est_ge5":int((vals>=5).sum()),
+                "n_est_ge10":int((vals>=10).sum()),
+                "n_est_ge20":int((vals>=20).sum()),
+                "n_est_ge50":int((vals>=50).sum()),
+                "median_est_n":float(vals.median()),
+                "min_est_n":float(vals.min()),
+                "max_est_n":float(vals.max())
+              }
+          summary["pericyte_annotation_available_in_author_QC"]=False
+          (out/"summary.json").write_text(json.dumps(summary,indent=2))
+          print(json.dumps(summary,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gse157827-endothelial-feasibility
+          path: /tmp/gse157827_endo/
+          retention-days: 7
