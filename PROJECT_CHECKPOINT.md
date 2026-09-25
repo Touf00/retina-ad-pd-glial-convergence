@@ -44,6 +44,13 @@ Original manuscript is already on bioRxiv; journal-version strengthening is in p
 - Latest successful run: 36136473933.
 - Artifact: 10865201485; expires 2026-10-02 12:43:55 UTC.
 
+### PXD066087 mouse PD retina availability decision
+- Official PRIDE API returned 26 Thermo `.raw` files plus four small `.sld` search/method files; no processed protein-abundance or differential-protein table is public.
+- The paper reports an A53T/M83 mouse-retina TMT experiment (`n=3/group`, 4,135 quantified protein groups, DEP threshold FC >=1.3 and nominal p<0.05), but its only supplementary file is Supplementary Figure 1.
+- Decision: exclude PXD066087 from quantitative candidate-gene validation and convergence testing. Raw-MS reprocessing would create a new, unmatched pipeline with substantial analyst degrees of freedom.
+- Permitted use is qualitative, explicitly cross-species mouse-model context only; never call it human PD-retina validation.
+- Durable audit: [`audits/PXD066087_AVAILABILITY_AUDIT.md`](audits/PXD066087_AVAILABILITY_AUDIT.md).
+
 ### Extra brain cohorts
 Completed donor-level pseudobulk/effect-vector analysis for:
 - GSE222494: sporadic AD vs controls; Astro, Micro, OPC, Oligo, Endothelial, Pericyte.
@@ -190,26 +197,20 @@ Blocking issue:
    - Generate a donor-level endothelial pseudobulk/effect vector under a frozen, diagnosis-blind mapping, then compare it with GSE174367 and GSE222494; if the unresolved 31-vs-28 drift prevents a defensible mapping, record that limitation and defer the effect analysis.
    - Pericytes are not author-separated and should not be forced from this cohort.
 
-3. PXD066087 mouse PD retina.
-   - PRIDE currently exposes raw TMT MS files, no obvious processed protein-level table.
-   - Recover processed differential-protein results from article/supplement if available.
-   - Otherwise formally exclude it from the journal extension rather than doing an unmatched de novo raw-proteomics pipeline.
-   - It is cross-species support only, never human PD-retina validation.
-
-4. Robustness/final synthesis.
+3. Robustness/final synthesis.
    - Use completed 2x2 glial matrix + existing donor bootstrap.
    - Decide whether more pairwise bootstraps are needed for the 16 comparisons.
    - Freeze language around heterogeneity/context dependence.
    - Do not force a universal convergence claim.
 
-5. Final journal-version inclusion decisions.
+4. Final journal-version inclusion decisions.
    Likely include:
    - PXD040225 independent AD-retina support.
    - 2x2 glial cross-cohort sensitivity matrix.
    - Vascular extension as exploratory/sensitivity unless stronger replication emerges.
    - Exact clean-room reproducibility status.
 
-6. Only after analysis freeze:
+5. Only after analysis freeze:
    - update manuscript;
    - update figures/supplement;
    - update Code Availability;
