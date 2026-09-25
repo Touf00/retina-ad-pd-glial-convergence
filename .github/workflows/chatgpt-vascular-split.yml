@@ -1,0 +1,183 @@
+name: ChatGPT vascular subtype split
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-vascular-split.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install pandas numpy scipy openpyxl h5py requests
+      - name: Split broad vascular populations diagnosis-blind
+        shell: bash
+        run: |
+          cat > /tmp/split.py <<'PY'
+          from pathlib import Path
+          import re,json,requests,h5py
+          import numpy as np,pandas as pd
+          from scipy.sparse import csc_matrix
+          OUT=Path("/tmp/vascular_split"); OUT.mkdir(exist_ok=True); DL=OUT/"downloads"; DL.mkdir(exist_ok=True)
+          PANELS={
+            "Endothelial":["PECAM1","VWF","CLDN5","EMCN","KDR","FLT1","ESAM","RAMP2","PLVAP","SLC2A1","MFSD2A","CA4","RGCC"],
+            "Pericyte_Mural":["PDGFRB","RGS5","CSPG4","MCAM","ABCC9","KCNJ8","NOTCH3","DES"],
+            "Smooth_muscle":["ACTA2","TAGLN","MYH11","CNN1"],
+            "Fibroblast_VLMC":["COL1A1","COL1A2","COL3A1","DCN","LUM","COL6A1"]
+          }
+          MARKERS=sorted(set(sum(PANELS.values(),[])))
+          def dl(url,p):
+            if p.exists() and p.stat().st_size:return
+            with requests.get(url,stream=True,timeout=180) as r:
+              r.raise_for_status()
+              with open(p,"wb") as f:
+                for ch in r.iter_content(4*1024*1024):
+                  if ch:f.write(ch)
+          def score_clusters(pb): # genes x clusters raw count
+            lib=pb.sum(axis=0).astype(float)
+            cpm=(pb+0.0).div(lib.replace(0,np.nan),axis=1)*1e6
+            L=np.log2(cpm+1)
+            rows=[]
+            for cl in pb.columns:
+              scores={}
+              det={}
+              for name,genes in PANELS.items():
+                present=[g for g in genes if g in L.index]
+                vals=L.loc[present,cl]
+                scores[name]=float(vals.mean()) if len(vals) else np.nan
+                det[name]=int((pb.loc[present,cl]>0).sum()) if len(vals) else 0
+              order=sorted([(v,k) for k,v in scores.items() if np.isfinite(v)],reverse=True)
+              topv,top=order[0]; second=order[1][0] if len(order)>1 else -np.inf
+              margin=topv-second
+              label=top if det[top]>=2 and margin>=0.35 else "Ambiguous"
+              rows.append({"cluster":str(cl),"assigned":label,"top_score":topv,"margin":margin,
+                           **{f"score_{k}":v for k,v in scores.items()},
+                           **{f"detected_{k}":v for k,v in det.items()}})
+            return pd.DataFrame(rows)
+
+          # ---------- GSE243639 ----------
+          pu=DL/"GSE243639_UMAP_coordinates.xlsx"; pc=DL/"GSE243639_Filtered_count_table.csv.gz"
+          dl("https://ftp.ncbi.nlm.nih.gov/geo/series/GSE243nnn/GSE243639/suppl/GSE243639_UMAP_coordinates.xlsx",pu)
+          dl("https://ftp.ncbi.nlm.nih.gov/geo/series/GSE243nnn/GSE243639/suppl/GSE243639_Filtered_count_table.csv.gz",pc)
+          xls=pd.ExcelFile(pu)
+          (OUT/"GSE243639_sheet_names.txt").write_text("\n".join(xls.sheet_names))
+          cells=pd.read_excel(pu,sheet_name="HighLevelCellTypes")
+          cells["CELL_ID"]=cells["CELL_ID"].astype(str).str.strip()
+          vc=cells[cells["IDENT"].astype(str).str.upper().isin(["VC","VASC","VASCULAR"])].copy()
+          if len(vc)==0: raise RuntimeError("No author VC cells")
+          header=pd.read_csv(pc,nrows=0).columns.astype(str).tolist()
+          raw=header[1:]; canon=[re.sub(r"\.(\d+)$",r"-\1",x) for x in raw]
+          c2raw=dict(zip(canon,raw))
+          if not set(vc.CELL_ID).issubset(c2raw): raise RuntimeError("VC cells not all in matrix")
+          selected_raw=[c2raw[x] for x in vc.CELL_ID]
+          raw2cluster=dict(zip([c2raw[x] for x in vc.CELL_ID],vc["CLUSTER"].astype(str)))
+          raw2donor={c2raw[x]:x.split("_",1)[0].replace(".","_") for x in vc.CELL_ID}
+          use=[header[0]]+selected_raw
+          cluster_acc={}; donor_cluster_counts=vc.assign(donor_id=vc.CELL_ID.str.split("_",n=1).str[0].str.replace(".","_",regex=False)).groupby(["donor_id","CLUSTER"]).size().rename("n").reset_index()
+          marker_data={}
+          libs={cl:0 for cl in vc.CLUSTER.astype(str).unique()}
+          for chunk in pd.read_csv(pc,usecols=use,index_col=0,chunksize=100):
+            # all-gene library totals per cluster
+            for cl in libs:
+              cols=[x for x in selected_raw if raw2cluster[x]==cl]
+              libs[cl]+=int(chunk[cols].to_numpy(dtype=np.int64,copy=False).sum())
+            for g in set(chunk.index.astype(str)) & set(MARKERS):
+              marker_data[g]={cl:int(chunk[[x for x in selected_raw if raw2cluster[x]==cl]].loc[g].sum()) for cl in libs}
+          pb243=pd.DataFrame(marker_data).T.reindex(MARKERS).fillna(0).astype(int)
+          # fake remaining library mass via an OTHER row so score denominator is total library
+          pb243.loc["__OTHER__"]=[max(0,libs[c]-int(pb243[c].sum())) for c in pb243.columns]
+          sc243=score_clusters(pb243.drop(index="__OTHER__").assign(**{}) if False else pb243)
+          # scores should use true lib totals; recompute explicitly
+          rows=[]
+          for cl in pb243.columns:
+            scores={}; det={}
+            for name,genes in PANELS.items():
+              vals=[]
+              for g in genes:
+                if g in pb243.index:
+                  c=int(pb243.loc[g,cl]); vals.append(np.log2(c/max(libs[cl],1)*1e6+1))
+              scores[name]=float(np.mean(vals)); det[name]=sum(int(pb243.loc[g,cl])>0 for g in genes if g in pb243.index)
+            order=sorted([(v,k) for k,v in scores.items()],reverse=True)
+            topv,top=order[0]; margin=topv-order[1][0]
+            label=top if det[top]>=2 and margin>=0.35 else "Ambiguous"
+            rows.append({"cluster":cl,"assigned":label,"top_score":topv,"margin":margin,
+                         "cluster_total_umis":libs[cl],**{f"score_{k}":v for k,v in scores.items()},**{f"detected_{k}":v for k,v in det.items()}})
+          sc243=pd.DataFrame(rows)
+          sc243.to_csv(OUT/"GSE243639_VC_cluster_marker_scores.csv",index=False)
+          vc=vc.merge(sc243[["cluster","assigned"]],left_on=vc.CLUSTER.astype(str),right_on="cluster",how="left")
+          vc["donor_id"]=vc.CELL_ID.str.split("_",n=1).str[0].str.replace(".","_",regex=False)
+          cov243=vc.groupby(["donor_id","assigned"]).size().unstack(fill_value=0).reset_index()
+          cov243.to_csv(OUT/"GSE243639_vascular_subtype_donor_coverage.csv",index=False)
+          vc[["CELL_ID","CLUSTER","IDENT","donor_id","assigned"]].to_csv(OUT/"GSE243639_VC_cell_assignments.csv.gz",index=False,compression="gzip")
+
+          # ---------- GSE174367 ----------
+          pm=DL/"GSE174367_meta.csv.gz"; ph=DL/"GSE174367.h5"
+          dl("https://ftp.ncbi.nlm.nih.gov/geo/series/GSE174nnn/GSE174367/suppl/GSE174367_snRNA-seq_cell_meta.csv.gz",pm)
+          dl("https://ftp.ncbi.nlm.nih.gov/geo/series/GSE174nnn/GSE174367/suppl/GSE174367_snRNA-seq_filtered_feature_bc_matrix.h5",ph)
+          m=pd.read_csv(pm)
+          ve=m[m["Cell.Type"].astype(str).eq("PER.END")].copy()
+          with h5py.File(ph,"r") as h:
+            grp=h["matrix"]
+            bar=[x.decode() if isinstance(x,bytes) else str(x) for x in grp["barcodes"][:]]
+            feat=grp["features"]
+            key="name" if "name" in feat else "id"
+            genes=[x.decode() if isinstance(x,bytes) else str(x) for x in feat[key][:]]
+            mat=csc_matrix((grp["data"][:],grp["indices"][:],grp["indptr"][:]),shape=tuple(grp["shape"][:]))
+          bidx={b:i for i,b in enumerate(bar)}
+          if not set(ve.Barcode.astype(str)).issubset(bidx):
+            miss=list(set(ve.Barcode.astype(str))-set(bidx))[:10]; raise RuntimeError(f"GSE174 barcodes missing {miss}")
+          gidx={}
+          for i,g in enumerate(genes):
+            if g in MARKERS and g not in gidx:gidx[g]=i
+          clusters=sorted(ve.cluster.astype(str).unique())
+          libs={}; marker_counts={}
+          for cl in clusters:
+            cols=[bidx[b] for b in ve.loc[ve.cluster.astype(str).eq(cl),"Barcode"].astype(str)]
+            libs[cl]=int(mat[:,cols].sum())
+            marker_counts[cl]={g:int(mat[i,cols].sum()) for g,i in gidx.items()}
+          rows=[]
+          for cl in clusters:
+            scores={}; det={}
+            for name,gs in PANELS.items():
+              vals=[np.log2(marker_counts[cl].get(g,0)/max(libs[cl],1)*1e6+1) for g in gs]
+              scores[name]=float(np.mean(vals)); det[name]=sum(marker_counts[cl].get(g,0)>0 for g in gs)
+            order=sorted([(v,k) for k,v in scores.items()],reverse=True)
+            topv,top=order[0]; margin=topv-order[1][0]
+            label=top if det[top]>=2 and margin>=0.35 else "Ambiguous"
+            rows.append({"cluster":cl,"assigned":label,"top_score":topv,"margin":margin,"cluster_total_umis":libs[cl],
+                         **{f"score_{k}":v for k,v in scores.items()},**{f"detected_{k}":v for k,v in det.items()}})
+          sc174=pd.DataFrame(rows); sc174.to_csv(OUT/"GSE174367_PER_END_cluster_marker_scores.csv",index=False)
+          ve=ve.merge(sc174[["cluster","assigned"]],on="cluster",how="left")
+          cov174=ve.groupby(["SampleID","Diagnosis","assigned"]).size().unstack(fill_value=0).reset_index()
+          cov174.to_csv(OUT/"GSE174367_vascular_subtype_donor_coverage.csv",index=False)
+          ve[["Barcode","SampleID","Diagnosis","cluster","assigned"]].to_csv(OUT/"GSE174367_PER_END_cell_assignments.csv.gz",index=False,compression="gzip")
+
+          summary={
+            "GSE243639":{"n_VC":len(vc),"n_donors":int(vc.donor_id.nunique()),"cluster_assignments":sc243.to_dict("records"),
+                         "subtype_totals":vc.assigned.value_counts().to_dict()},
+            "GSE174367":{"n_PER_END":len(ve),"n_donors":int(ve.SampleID.nunique()),"cluster_assignments":sc174.to_dict("records"),
+                         "subtype_totals":ve.assigned.value_counts().to_dict()}
+          }
+          (OUT/"vascular_split_summary.json").write_text(json.dumps(summary,indent=2))
+          print(json.dumps(summary,indent=2))
+          PY
+          python /tmp/split.py | tee /tmp/vascular_split.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vascular-subtype-split
+          path: |
+            /tmp/vascular_split/
+            /tmp/vascular_split.log
+          retention-days: 7
