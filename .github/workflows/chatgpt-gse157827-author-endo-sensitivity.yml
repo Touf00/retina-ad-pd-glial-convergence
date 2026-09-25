@@ -61,10 +61,10 @@ jobs:
           print("FILES",[x.name for x in files])
 
           candidates={
-            "AD174":"GSE174367_Endothelial_effects_common.csv.gz",
+            "AD174":"GSE174367_Endothelial_effects.csv.gz",
             "AD222":"GSE222494_Endothelial_effects_common.csv.gz",
-            "PD243":"GSE243639_Endothelial_effects_common.csv.gz",
-            "PD157":"GSE157783_Endothelial_effects_common.csv.gz",
+            "PD243":"GSE243639_Endothelial_effects.csv.gz",
+            "PD157":"GSE157783_Endothelial_effects.csv.gz",
           }
 
           def load_effect(name):
