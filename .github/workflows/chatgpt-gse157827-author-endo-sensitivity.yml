@@ -1,0 +1,114 @@
+name: ChatGPT GSE157827 author-Endo sensitivity
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-gse157827-author-endo-sensitivity.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pandas numpy scipy openpyxl requests
+      - name: Download vascular extension artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/vascular
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/10867267704/zip" -o /tmp/vascular.zip
+          unzip -q /tmp/vascular.zip -d /tmp/vascular
+          find /tmp/vascular -type f | sort
+      - name: Compare author-reported GSE157827 Endo effect vector
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, requests
+          import numpy as np, pandas as pd
+          from scipy.stats import spearmanr
+
+          OUT=Path("/tmp/gse157827_author_endo"); OUT.mkdir(exist_ok=True)
+          url="https://pmc-oa-opendata.s3.amazonaws.com/PMC7568283.1/pnas.2008762117.sd03.xlsx"
+          p=OUT/"pnas.2008762117.sd03.xlsx"
+          r=requests.get(url,timeout=(20,120)); r.raise_for_status(); p.write_bytes(r.content)
+          auth=pd.read_excel(p,sheet_name="Endo")
+          auth=auth.rename(columns={"Gene":"gene","AD_vs_NC_log2fc":"effect_author","Adjusted_p_value":"padj_author"})
+          auth=auth[["gene","effect_author","padj_author"]].dropna(subset=["gene","effect_author"]).copy()
+          auth["gene"]=auth.gene.astype(str).str.upper().str.strip()
+          auth=auth[~auth.gene.str.startswith("MT-")].copy()
+          auth=auth[~auth.gene.duplicated(keep=False)].set_index("gene")
+          auth.to_csv(OUT/"GSE157827_author_Endo_effect_vector.csv.gz",compression="gzip")
+
+          def locate(substr):
+              hits=[x for x in Path("/tmp/vascular").rglob("*") if x.is_file() and substr in x.name]
+              if len(hits)!=1:
+                  print("LOCATE",substr,[str(x) for x in hits])
+                  raise RuntimeError((substr,len(hits)))
+              return hits[0]
+
+          # Inspect artifact names and use already harmonized common-effect vectors.
+          files=[x for x in Path("/tmp/vascular").rglob("*") if x.is_file()]
+          print("FILES",[x.name for x in files])
+
+          candidates={
+            "AD174":"GSE174367_Endothelial_effects_common.csv.gz",
+            "AD222":"GSE222494_Endothelial_effects_common.csv.gz",
+            "PD243":"GSE243639_Endothelial_effects_common.csv.gz",
+            "PD157":"GSE157783_Endothelial_effects_common.csv.gz",
+          }
+
+          def load_effect(name):
+              p=locate(name)
+              x=pd.read_csv(p)
+              print(name,x.columns.tolist(),x.shape)
+              gene=[c for c in x.columns if c.lower() in {"gene","gene_symbol"}]
+              eff=[c for c in x.columns if c.lower() in {"effect","effect_log2cpm_ols","log2foldchange"}]
+              if not gene: gene=[x.columns[0]]
+              if not eff:
+                  num=[c for c in x.columns if c!=gene[0] and pd.api.types.is_numeric_dtype(x[c])]
+                  if len(num)!=1: raise RuntimeError((name,"effect column ambiguous",num))
+                  eff=num
+              y=x[[gene[0],eff[0]]].dropna().copy()
+              y[gene[0]]=y[gene[0]].astype(str).str.upper().str.strip()
+              y=y[~y[gene[0]].duplicated(keep=False)]
+              return y.set_index(gene[0])[eff[0]].astype(float)
+
+          vecs={k:load_effect(v) for k,v in candidates.items()}
+          rng=np.random.default_rng(20260925)
+          rows=[]
+          for label,v in vecs.items():
+              m=pd.concat([auth.effect_author.rename("A"),v.rename("B")],axis=1,join="inner").dropna()
+              rho=float(spearmanr(m.A,m.B).statistic)
+              agree=float((np.sign(m.A)==np.sign(m.B)).mean())
+              arr=m.B.to_numpy(); aa=m.A.to_numpy()
+              null=np.empty(5000)
+              for i in range(len(null)): null[i]=spearmanr(aa,rng.permutation(arr)).statistic
+              pp=float((1+(np.abs(null)>=abs(rho)).sum())/(len(null)+1))
+              rows.append({"comparison":f"GSE157827_author_Endo_vs_{label}","n_genes":len(m),"rho":rho,
+                           "sign_agreement":agree,"perm_p":pp})
+              m.to_csv(OUT/f"GSE157827_author_Endo_vs_{label}.csv.gz",compression="gzip")
+          res=pd.DataFrame(rows); res.to_csv(OUT/"summary.csv",index=False)
+          summary={
+            "author_effect_vector_n_genes_nonMT_unique":int(len(auth)),
+            "note":"Author Endo AD-vs-NC log2FC is a published cell-level effect vector, not donor-level pseudobulk. Use only as sensitivity/context.",
+            "comparisons":rows
+          }
+          (OUT/"summary.json").write_text(json.dumps(summary,indent=2))
+          print(json.dumps(summary,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gse157827-author-endo-sensitivity
+          path: /tmp/gse157827_author_endo/
+          retention-days: 7
