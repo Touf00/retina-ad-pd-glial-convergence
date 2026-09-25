@@ -66,13 +66,16 @@ jobs:
             text="".join(cell["source"])
             text=text.replace("/content/drive/MyDrive/RETINA_ND_V2",str(root))
             if marker=="RETINA-ND — STEP 26A1":
-              needle="# ============================================================\n# Q. DONOR-ONLY HARMONY"
-              inject='''PCA50_DIAG_PATH = ANNO_DIR / "GSE157827_STEP26A1_PCA50_DIAGNOSTIC.npy"
-np.save(PCA50_DIAG_PATH, np.asarray(adata_hvg.obsm["X_pca"], dtype=np.float64), allow_pickle=False)
-print("PCA50_DIAGNOSTIC_SAVED", PCA50_DIAG_PATH)
-
-# ============================================================
-# Q. DONOR-ONLY HARMONY'''
+              NL=chr(10)
+              needle="# ============================================================"+NL+"# Q. DONOR-ONLY HARMONY"
+              inject=NL.join([
+                'PCA50_DIAG_PATH = ANNO_DIR / "GSE157827_STEP26A1_PCA50_DIAGNOSTIC.npy"',
+                'np.save(PCA50_DIAG_PATH, np.asarray(adata_hvg.obsm["X_pca"], dtype=np.float64), allow_pickle=False)',
+                'print("PCA50_DIAGNOSTIC_SAVED", PCA50_DIAG_PATH)',
+                '',
+                '# ============================================================',
+                '# Q. DONOR-ONLY HARMONY',
+              ])
               if needle not in text:
                 raise RuntimeError("PCA injection point missing")
               text=text.replace(needle,inject,1)
