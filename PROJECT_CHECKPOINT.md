@@ -156,6 +156,27 @@ Interpretation:
 - Successful run: `36145217468`.
 - Artifact: `10869243247`; expires 2026-10-02 14:06:13 UTC.
 
+### GSE157827 published Endo effect-vector sensitivity
+- Official author supplement `pnas.2008762117.sd03.xlsx` contains an `Endo` sheet with published AD-vs-NC log2FC and adjusted p-values.
+- Non-mitochondrial unique-gene effect vector: 5,346 genes.
+- This is the authors' published cell-level Endo effect vector, NOT donor-level pseudobulk, so it is sensitivity/context only.
+- Comparisons against our donor-level vascular effect vectors:
+  - vs GSE174367 AD Endothelial: n=568 genes, rho 0.05270, sign agreement 51.94%, permutation p ~0.214 (not supportive).
+  - vs GSE222494 sporadic-AD Endothelial: n=4,942, rho 0.16633, sign agreement 55.46%, permutation p ~0.0002 (supportive).
+  - vs GSE243639 PD Endothelial: n=5,150, rho -0.02356, sign agreement 47.77%, permutation p ~0.0968 (not supportive).
+  - vs GSE157783 PD Endothelial: n=4,585, rho 0.18017, sign agreement 55.68%, permutation p ~0.0002 (supportive).
+- Interpretation: GSE157827 author-reported Endo biology is heterogeneous across comparator cohorts; it supports context-dependent rather than universal vascular convergence.
+- Successful run: 36147039005.
+- Artifact: 10869811622; expires 2026-10-02 14:23:00 UTC.
+
+### GSE157827 supplementary-data audit
+- Official supplements sd01-sd05 were inspected.
+- sd01 contains donor clinical/QC information including donor-specific Endo proportions.
+- sd02 contains author cell-type marker statistics.
+- sd03 contains published AD-vs-NC effect tables for Astro, Endo, Excit, Inhit, Mic, Oligo.
+- sd05 contains within-cell-type state/subcluster contrasts, including Endo `Up_vs_No_change_log2fc`.
+- Successful run: 36146729500.
+
 ### GSE243639 vascular identity
 - Author `VC` population was audited diagnosis-blind.
 - It behaves as endothelial-like rather than a clear endothelial/pericyte mixture.
