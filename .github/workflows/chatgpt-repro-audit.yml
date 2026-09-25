@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          BASE="$RUNNER_TEMP/retina_drive/MyDrive"
+          BASE="/tmp/retina_drive/MyDrive"
           SRC="$BASE/RETINA_ND_V2"
           mkdir -p "$SRC/resources/pathways"
           mkdir -p "$SRC/ocular_validation/Wolf_Cell_2023"
@@ -112,7 +112,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          BASE="$RUNNER_TEMP/retina_drive/MyDrive"
+          BASE="/tmp/retina_drive/MyDrive"
           mkdir -p "$BASE"
           cp RETINA_ND_bioRxiv_release_FRESH_TEST.ipynb /tmp/RETINA_ND_FRESH_TEST_RUNNER.ipynb
           sed -i \
@@ -126,7 +126,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          ROOT="$RUNNER_TEMP/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST"
+          ROOT="/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST"
           rm -rf "$ROOT"
           jupyter nbconvert \
             --to notebook \
@@ -143,7 +143,7 @@ jobs:
           mkdir -p /tmp/audit_bundle
           cp /tmp/retina_execution.log /tmp/audit_bundle/ 2>/dev/null || true
           cp /tmp/RETINA_ND_FRESH_EXECUTED.ipynb /tmp/audit_bundle/ 2>/dev/null || true
-          ROOT="$RUNNER_TEMP/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST"
+          ROOT="/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST"
           find "$ROOT" -maxdepth 5 -type f \( -name "*FINAL*QC*" -o -name "*CONVERGENCE*SUMMARY*" -o -name "*R3*NULL*" -o -name "*CANDIDATE*RANKING*" -o -name "release_environment_snapshot.json" \) -size -20M -exec cp {} /tmp/audit_bundle/ \; 2>/dev/null || true
           find "$ROOT/logs" -maxdepth 1 -type f -size -5M -exec cp {} /tmp/audit_bundle/ \; 2>/dev/null || true
           df -h > /tmp/audit_bundle/disk_final.txt
