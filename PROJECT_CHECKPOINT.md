@@ -147,6 +147,17 @@ Interpretation:
 - Upstream corrected PD-vascular pseudobulk run: 36140417739.
 - Upstream artifact: 10865839087; expires 2026-10-02 13:22:10 UTC.
 
+### GSE157827 author-Endo sensitivity — COMPLETED
+- Run: 36147039005; completed successfully.
+- Published GSE157827 Endo AD-vs-NC effect vector contains 5,346 unique non-mitochondrial genes.
+- Comparison to vascular effect vectors:
+  - vs GSE174367 AD Endo: n=568, rho=0.05270, sign agreement=0.5194, permutation p=0.2138.
+  - vs GSE222494 AD Endo: n=4,942, rho=0.16633, sign agreement=0.5546, permutation p=0.00020.
+  - vs GSE243639 PD Endo: n=5,150, rho=-0.02356, sign agreement=0.4777, permutation p=0.0968.
+  - vs GSE157783 PD Endo: n=4,585, rho=0.18017, sign agreement=0.5568, permutation p=0.00020.
+- Interpretation: GSE157827 provides useful endothelial sensitivity evidence, but it is not a donor-level pseudobulk effect vector. It supports context-dependent endothelial concordance (stronger with AD222 and PD157; absent with AD174 and PD243), not universal vascular convergence.
+- Keep as sensitivity/context unless a defensible donor-level GSE157827 endothelial pseudobulk is later reconstructed.
+
 ### GSE157827 endothelial feasibility
 - Official author supplement recovered deterministically from PMC Open Access and verified by SHA-256 `a7cf9493b99e5cb904e8dcc764349a331fda701509ebbe5a9e1ad868b18bc344`.
 - AD: 12 donors, estimated 1,729.8 author-labelled Endo nuclei total; all 12 donors >=20, 10/12 >=50; median 96, range 23-645.
