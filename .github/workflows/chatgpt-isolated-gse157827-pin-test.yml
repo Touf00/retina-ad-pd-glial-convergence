@@ -1,0 +1,124 @@
+name: ChatGPT isolated GSE157827 neighbors-Leiden pin test
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-isolated-gse157827-pin-test.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  isolated-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install archival environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Download saved STEP26A1 state from clean-room run
+        uses: actions/download-artifact@v4
+        with:
+          name: retina-nd-clean-room-audit
+          path: /tmp/step26a1
+          repository: Touf00/retina-ad-pd-glial-convergence
+          run-id: 36144781563
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Baseline clustering from identical saved Harmony20
+        run: |
+          python - <<'PY'
+          import json, importlib.metadata as im
+          from pathlib import Path
+          import numpy as np, pandas as pd, anndata as ad, scanpy as sc
+
+          root=Path("/tmp/step26a1")
+          H=np.load(root/"GSE157827_STEP26A1_HARMONY20_v1.npy")
+          obs=pd.read_csv(root/"GSE157827_STEP26A1_OBS_CLUSTER_ASSIGNMENTS_v1.csv.gz")
+          assert H.shape==(169506,20), H.shape
+          assert len(obs)==H.shape[0]
+
+          a=ad.AnnData(X=np.zeros((H.shape[0],1),dtype=np.float32),obs=obs.copy())
+          a.obsm["X_harmony20"]=H.astype(np.float32,copy=False)
+          sc.pp.neighbors(a,n_neighbors=20,use_rep="X_harmony20",metric="euclidean",random_state=20260914)
+          sc.tl.leiden(a,resolution=1.0,random_state=20260914,key_added="cluster_retest",flavor="igraph",n_iterations=2,directed=False)
+
+          out={
+            "networkx":im.version("networkx"),
+            "threadpoolctl":im.version("threadpoolctl"),
+            "n_clusters":int(a.obs["cluster_retest"].astype(str).nunique()),
+            "cluster_counts":a.obs["cluster_retest"].astype(str).value_counts().sort_index().to_dict(),
+          }
+          Path("/tmp/baseline.json").write_text(json.dumps(out,indent=2))
+          print("BASELINE_RESULT",json.dumps(out))
+          PY
+
+      - name: Install historical transitive pins
+        run: |
+          python -m pip install --force-reinstall networkx==3.6.1 threadpoolctl==3.6.0
+          python - <<'PY'
+          import importlib.metadata as im
+          print("PIN_CHECK networkx",im.version("networkx"))
+          print("PIN_CHECK threadpoolctl",im.version("threadpoolctl"))
+          PY
+
+      - name: Historical-pin clustering from identical saved Harmony20
+        run: |
+          python - <<'PY'
+          import json, importlib.metadata as im
+          from pathlib import Path
+          import numpy as np, pandas as pd, anndata as ad, scanpy as sc
+
+          root=Path("/tmp/step26a1")
+          H=np.load(root/"GSE157827_STEP26A1_HARMONY20_v1.npy")
+          obs=pd.read_csv(root/"GSE157827_STEP26A1_OBS_CLUSTER_ASSIGNMENTS_v1.csv.gz")
+
+          a=ad.AnnData(X=np.zeros((H.shape[0],1),dtype=np.float32),obs=obs.copy())
+          a.obsm["X_harmony20"]=H.astype(np.float32,copy=False)
+          sc.pp.neighbors(a,n_neighbors=20,use_rep="X_harmony20",metric="euclidean",random_state=20260914)
+          sc.tl.leiden(a,resolution=1.0,random_state=20260914,key_added="cluster_retest",flavor="igraph",n_iterations=2,directed=False)
+
+          out={
+            "networkx":im.version("networkx"),
+            "threadpoolctl":im.version("threadpoolctl"),
+            "n_clusters":int(a.obs["cluster_retest"].astype(str).nunique()),
+            "cluster_counts":a.obs["cluster_retest"].astype(str).value_counts().sort_index().to_dict(),
+          }
+          Path("/tmp/historical.json").write_text(json.dumps(out,indent=2))
+          print("HISTORICAL_PIN_RESULT",json.dumps(out))
+          PY
+
+      - name: Compare
+        run: |
+          python - <<'PY'
+          import json
+          b=json.load(open("/tmp/baseline.json"))
+          h=json.load(open("/tmp/historical.json"))
+          out={
+            "baseline":b,
+            "historical_pins":h,
+            "cluster_count_changed":b["n_clusters"]!=h["n_clusters"],
+            "restored_archival_28":h["n_clusters"]==28,
+          }
+          print("FINAL_COMPARISON",json.dumps(out,indent=2))
+          open("/tmp/final_comparison.json","w").write(json.dumps(out,indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: isolated-gse157827-pin-test
+          path: |
+            /tmp/baseline.json
+            /tmp/historical.json
+            /tmp/final_comparison.json
+          retention-days: 7
