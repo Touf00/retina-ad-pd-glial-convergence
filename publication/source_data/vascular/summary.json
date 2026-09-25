@@ -1,0 +1,157 @@
+{
+  "coverage": {
+    "174_Endothelial": {
+      "n_genes": 580,
+      "n_case": 6,
+      "n_control": 5
+    },
+    "174_Pericyte": {
+      "n_genes": 790,
+      "n_case": 7,
+      "n_control": 6
+    },
+    "243_Endothelial": {
+      "n_genes": 7965,
+      "n_case": 11,
+      "n_control": 11
+    },
+    "157_Endothelial": {
+      "n_genes": 6131,
+      "n_case": 5,
+      "n_control": 6
+    },
+    "157_Pericyte": {
+      "n_genes": 6354,
+      "n_case": 5,
+      "n_control": 6
+    },
+    "222_Endothelial": {
+      "n_genes": 6746,
+      "n_case": 8,
+      "n_control": 8
+    },
+    "222_Pericyte": {
+      "n_genes": 1469,
+      "n_case": 8,
+      "n_control": 8
+    }
+  },
+  "comparisons": [
+    {
+      "comparison": "AD_replication_Endothelial",
+      "cell_class": "Endothelial",
+      "n_genes": 570,
+      "rho": 0.11181071494121009,
+      "p": 0.007540803067266477,
+      "sign_agreement": 0.5140350877192983,
+      "perm_p": 0.007998400319936013
+    },
+    {
+      "comparison": "AD_replication_Pericyte",
+      "cell_class": "Pericyte",
+      "n_genes": 724,
+      "rho": 0.11679053666811856,
+      "p": 0.0016447015547490632,
+      "sign_agreement": 0.5428176795580111,
+      "perm_p": 0.001799640071985603
+    },
+    {
+      "comparison": "PD_replication_Endothelial",
+      "cell_class": "Endothelial",
+      "n_genes": 5876,
+      "rho": -0.0019668723954843984,
+      "p": 0.8801817542954553,
+      "sign_agreement": 0.497787610619469,
+      "perm_p": 0.8834233153369326
+    },
+    {
+      "comparison": "Cross_Endo_AD174_PD243",
+      "cell_class": "Endothelial",
+      "n_genes": 570,
+      "rho": 0.09656724089640166,
+      "p": 0.021119499696909856,
+      "sign_agreement": 0.5385964912280702,
+      "perm_p": 0.022595480903819236
+    },
+    {
+      "comparison": "Cross_Endo_AD174_PD157",
+      "cell_class": "Endothelial",
+      "n_genes": 568,
+      "rho": 0.05428948094608137,
+      "p": 0.19636743642380639,
+      "sign_agreement": 0.5193661971830986,
+      "perm_p": 0.20035992801439712
+    },
+    {
+      "comparison": "Cross_Endo_AD222_PD243",
+      "cell_class": "Endothelial",
+      "n_genes": 6379,
+      "rho": 0.17202666435685796,
+      "p": 1.4592955541764644e-43,
+      "sign_agreement": 0.5583947327167268,
+      "perm_p": 0.0001999600079984003
+    },
+    {
+      "comparison": "Cross_Endo_AD222_PD157",
+      "cell_class": "Endothelial",
+      "n_genes": 5412,
+      "rho": 0.20066550244450454,
+      "p": 2.807375535134176e-50,
+      "sign_agreement": 0.5685513673318552,
+      "perm_p": 0.0001999600079984003
+    },
+    {
+      "comparison": "Cross_Pericyte_AD174_PD157",
+      "cell_class": "Pericyte",
+      "n_genes": 771,
+      "rho": 0.0737727061954396,
+      "p": 0.04056921574838769,
+      "sign_agreement": 0.5330739299610895,
+      "perm_p": 0.04299140171965607
+    },
+    {
+      "comparison": "Cross_Pericyte_AD222_PD157",
+      "cell_class": "Pericyte",
+      "n_genes": 1436,
+      "rho": 0.20391815201109026,
+      "p": 6.0552353398630555e-15,
+      "sign_agreement": 0.5605849582172702,
+      "perm_p": 0.0001999600079984003
+    }
+  ],
+  "bootstrap": [
+    {
+      "comparison": "Cross_Endo_AD174_PD243",
+      "B": 300,
+      "median_rho": 0.04954615045550188,
+      "ci2_5": -0.12496414837258736,
+      "ci97_5": 0.20936971829788062,
+      "fraction_gt0": 0.7766666666666666
+    },
+    {
+      "comparison": "Cross_Endo_AD174_PD157",
+      "B": 300,
+      "median_rho": 0.03224924630776261,
+      "ci2_5": -0.17999272566990832,
+      "ci97_5": 0.26299128658562027,
+      "fraction_gt0": 0.6333333333333333
+    },
+    {
+      "comparison": "Cross_Endo_AD222_PD243",
+      "B": 300,
+      "median_rho": 0.1181394051588179,
+      "ci2_5": -0.05384471617756818,
+      "ci97_5": 0.26455343591912706,
+      "fraction_gt0": 0.9
+    },
+    {
+      "comparison": "Cross_Endo_AD222_PD157",
+      "B": 300,
+      "median_rho": 0.1306587635961898,
+      "ci2_5": -0.028566493831968597,
+      "ci97_5": 0.2650255904897894,
+      "fraction_gt0": 0.9533333333333334
+    }
+  ],
+  "pericyte_PD_replication_available": false
+}

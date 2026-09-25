@@ -1,0 +1,34 @@
+{
+  "author_effect_vector_n_genes_nonMT_unique": 5346,
+  "note": "Author Endo AD-vs-NC log2FC is a published cell-level effect vector, not donor-level pseudobulk. Use only as sensitivity/context.",
+  "comparisons": [
+    {
+      "comparison": "GSE157827_author_Endo_vs_AD174",
+      "n_genes": 568,
+      "rho": 0.05270207458380433,
+      "sign_agreement": 0.5193661971830986,
+      "perm_p": 0.21375724855028994
+    },
+    {
+      "comparison": "GSE157827_author_Endo_vs_AD222",
+      "n_genes": 4942,
+      "rho": 0.16632968196573733,
+      "sign_agreement": 0.5546337515176042,
+      "perm_p": 0.0001999600079984003
+    },
+    {
+      "comparison": "GSE157827_author_Endo_vs_PD243",
+      "n_genes": 5150,
+      "rho": -0.02356191263394316,
+      "sign_agreement": 0.47766990291262135,
+      "perm_p": 0.09678064387122576
+    },
+    {
+      "comparison": "GSE157827_author_Endo_vs_PD157",
+      "n_genes": 4585,
+      "rho": 0.1801721561053378,
+      "sign_agreement": 0.5568157033805888,
+      "perm_p": 0.0001999600079984003
+    }
+  ]
+}
