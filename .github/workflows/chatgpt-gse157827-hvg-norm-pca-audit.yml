@@ -1,0 +1,374 @@
+name: ChatGPT GSE157827 HVG-Normalization-PCA audit
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-gse157827-hvg-norm-pca-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      RETINA_ND_ROOT: /tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.14"
+
+      - name: Install current clean-room environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install nbconvert jupyter
+
+      - name: Build focused GSE157827 notebook with stage checkpoints
+        run: |
+          mkdir -p "$RETINA_ND_ROOT/locks"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root=Path("/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST")
+          locks=root/"locks"
+          (locks/"AD_BRAIN_DATASET_ROLES_v1.json").write_text(json.dumps({
+            "status":"AD_DATASET_ROLES_FROZEN_BEFORE_DISEASE_EXPRESSION",
+            "primary_replication":{"dataset":"GSE157827"},
+            "primary_discovery":{"dataset":"GSE174367"}
+          },indent=2))
+          (locks/"GSE174367_AD_DISCOVERY_FINAL_ROBUSTNESS_FREEZE_v1.json").write_text(json.dumps({
+            "status":"AD_DISCOVERY_FINAL_ROBUSTNESS_FROZEN",
+            "AD_replication_performed":False,
+            "AD_PD_convergence_performed":False
+          },indent=2))
+
+          nb=json.loads(Path("RETINA_ND_bioRxiv_release.ipynb").read_text())
+          markers=[
+            "STEP 24 — GSE157827 AD REPLICATION RAW-DATA AUDIT",
+            "STEP 24C — COMPLETE GSE157827 RAW REPLICATION AUDIT",
+            "STEP 25 — GSE157827 REPLICATION DONOR METADATA",
+            "RETINA-ND — STEP 26A1",
+          ]
+          wanted=[]
+          for marker in markers:
+            hits=[c for c in nb["cells"] if marker in "".join(c.get("source",[]))]
+            if len(hits)!=1:
+              raise RuntimeError(f"{marker}: expected one cell, got {len(hits)}")
+            cell=dict(hits[0])
+            text="".join(cell["source"]).replace("/content/drive/MyDrive/RETINA_ND_V2",str(root))
+
+            if marker=="RETINA-ND — STEP 26A1":
+              pre="# M. SEURAT-v3 HVG WITH PREDECLARED NUMERICAL FALLBACK"
+              inject=r'''# PRE-HVG RAW CHECKPOINT FOR NUMERICAL-DRIFT AUDIT
+sp.save_npz("/tmp/GSE157827_PREHVG_X.npz", adata.X.tocsr(), compressed=True)
+adata.obs[["donor_id","cell_uid"]].to_csv(
+    "/tmp/GSE157827_PREHVG_OBS.csv.gz", index=False, compression="gzip"
+)
+adata.var[["gene_id","gene_symbol"]].to_csv(
+    "/tmp/GSE157827_PREHVG_VAR.csv.gz", index=False, compression="gzip"
+)
+print("PREHVG_CHECKPOINT_SAVED", adata.shape)
+
+# M. SEURAT-v3 HVG WITH PREDECLARED NUMERICAL FALLBACK'''
+              if pre not in text:
+                raise RuntimeError("pre-HVG injection point missing")
+              text=text.replace(pre,inject,1)
+
+              pca_marker='''sc.tl.pca(
+    adata_hvg,'''.strip()
+              scaled_inject=r'''np.save(
+    "/tmp/GSE157827_SCALED_CURRENT_FIXED_CURRENT_HVG.npy",
+    np.asarray(adata_hvg.X, dtype=np.float32),
+    allow_pickle=False,
+)
+print("CURRENT_SCALED_MATRIX_SAVED", adata_hvg.X.shape)
+
+sc.tl.pca(
+    adata_hvg,'''.strip()
+              if pca_marker not in text:
+                raise RuntimeError("PCA injection point missing")
+              text=text.replace(pca_marker,scaled_inject,1)
+
+              harmony_marker="# ============================================================\n# Q. DONOR-ONLY HARMONY"
+              pca_inject=r'''np.save(
+    "/tmp/GSE157827_PCA50_CURRENT.npy",
+    np.asarray(adata_hvg.obsm["X_pca"], dtype=np.float64),
+    allow_pickle=False,
+)
+print("CURRENT_PCA50_SAVED", adata_hvg.obsm["X_pca"].shape)
+
+# ============================================================
+# Q. DONOR-ONLY HARMONY'''
+              if harmony_marker not in text:
+                raise RuntimeError("Harmony injection point missing")
+              text=text.replace(harmony_marker,pca_inject,1)
+
+            cell["source"]=text.splitlines(keepends=True)
+            cell["outputs"]=[]
+            cell["execution_count"]=None
+            wanted.append(cell)
+
+          mini={
+            "cells":wanted,
+            "metadata":nb.get("metadata",{}),
+            "nbformat":nb["nbformat"],
+            "nbformat_minor":nb["nbformat_minor"],
+          }
+          Path("/tmp/GSE157827_HVG_NORM_PCA_MINI.ipynb").write_text(json.dumps(mini))
+          print("MINI_CELLS",len(wanted))
+          PY
+
+      - name: Rebuild current pipeline and save raw scaled PCA checkpoints
+        run: |
+          set -o pipefail
+          jupyter nbconvert \
+            --to notebook \
+            --execute /tmp/GSE157827_HVG_NORM_PCA_MINI.ipynb \
+            --output /tmp/GSE157827_HVG_NORM_PCA_EXECUTED.ipynb \
+            --ExecutePreprocessor.timeout=5400 \
+            2>&1 | tee /tmp/current_build.log
+
+      - name: Snapshot current HVG and cluster result
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd, numpy as np, json, hashlib
+          root=Path("/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST/GSE157827_AD_replication/annotation_provisional")
+          hvg=pd.read_csv(root/"GSE157827_DISEASE_BLIND_HVG1000_v1.csv")
+          obs=pd.read_csv(root/"GSE157827_STEP26A1_OBS_CLUSTER_ASSIGNMENTS_v1.csv.gz")
+          pca=np.load("/tmp/GSE157827_PCA50_CURRENT.npy",mmap_mode="r")
+          out={
+            "n_hvg":int(len(hvg)),
+            "hvg_gene_ids":hvg["gene_id"].astype(str).tolist(),
+            "n_clusters":int(obs["cluster"].astype(str).nunique()),
+            "pca_shape":list(pca.shape),
+          }
+          Path("/tmp/current_reference.json").write_text(json.dumps(out,indent=2))
+          print("CURRENT_REFERENCE",json.dumps({k:v for k,v in out.items() if k!="hvg_gene_ids"},indent=2))
+          PY
+
+      - name: Build Colab-like upstream environment
+        run: |
+          python -m venv /tmp/upstream_colab
+          /tmp/upstream_colab/bin/python -m pip install --upgrade pip
+          /tmp/upstream_colab/bin/python -m pip install \
+            numpy==2.0.2 \
+            pandas==2.3.3 \
+            scipy==1.16.3 \
+            anndata==0.13.3.post0 \
+            scanpy==1.12.4 \
+            scikit-learn==1.6.1 \
+            scikit-misc==0.5.2 \
+            harmonypy==2.0.0 \
+            leidenalg==0.12.0 \
+            igraph==1.0.0
+          /tmp/upstream_colab/bin/python - <<'PY'
+          import numpy, scipy, sklearn, scanpy, anndata, harmonypy
+          print("ALT_ENV",numpy.__version__,scipy.__version__,sklearn.__version__,scanpy.__version__,anndata.__version__,harmonypy.__version__)
+          PY
+
+      - name: Run alternate HVG normalization scale PCA and cluster tests
+        run: |
+          /tmp/upstream_colab/bin/python - <<'PY'
+          from pathlib import Path
+          import json, gc
+          import numpy as np, pandas as pd, scipy.sparse as sp
+          import anndata as ad, scanpy as sc, harmonypy
+
+          SEED=20260914
+          X0=sp.load_npz("/tmp/GSE157827_PREHVG_X.npz").tocsr()
+          obs0=pd.read_csv("/tmp/GSE157827_PREHVG_OBS.csv.gz")
+          var0=pd.read_csv("/tmp/GSE157827_PREHVG_VAR.csv.gz")
+          current=json.loads(Path("/tmp/current_reference.json").read_text())
+          current_hvg=set(map(str,current["hvg_gene_ids"]))
+
+          def make_adata():
+              return ad.AnnData(
+                  X=X0.copy(),
+                  obs=obs0.set_index("cell_uid",drop=False).copy(),
+                  var=var0.set_index("gene_id",drop=False).copy(),
+              )
+
+          def choose_hvg(a):
+              attempts=[]
+              for span in [0.3,0.5,0.7,1.0]:
+                  try:
+                      r=sc.pp.highly_variable_genes(
+                          a,n_top_genes=1000,flavor="seurat_v3",
+                          batch_key="donor_id",span=span,subset=False,
+                          check_values=True,inplace=False
+                      )
+                      if int(r["highly_variable"].sum())!=1000:
+                          raise RuntimeError("wrong HVG count")
+                      return r,float(span),attempts+[{"span":span,"status":"PASS"}]
+                  except ValueError as e:
+                      txt=str(e)
+                      numerical=(
+                          "reciprocal condition number" in txt.lower()
+                          or "near singularities" in txt.lower()
+                          or "svd" in txt.lower()
+                      )
+                      attempts.append({"span":span,"status":"NUMERICAL_FAIL" if numerical else "VALUE_ERROR","exception":txt})
+                      if not numerical:
+                          raise
+              raise RuntimeError("all HVG spans failed")
+
+          def pca_harmony_cluster(a):
+              sc.pp.scale(a,zero_center=True,max_value=10)
+              a.X=np.asarray(a.X,dtype=np.float32)
+              sc.tl.pca(a,n_comps=50,svd_solver="randomized",random_state=SEED)
+              P=np.asarray(a.obsm["X_pca"],dtype=np.float64)
+              ho=harmonypy.run_harmony(P,a.obs,"donor_id",max_iter_harmony=30,random_state=0)
+              Z=np.asarray(ho.Z_corr,dtype=np.float64)
+              if Z.shape==(50,len(a)): Z=Z.T
+              H=Z[:,:20].astype(np.float32)
+              a.obsm["X_harmony20"]=H
+              sc.pp.neighbors(a,n_neighbors=20,use_rep="X_harmony20",metric="euclidean",random_state=SEED)
+              sc.tl.leiden(a,resolution=1.0,random_state=SEED,key_added="cluster",flavor="igraph",n_iterations=2,directed=False)
+              return P,H,int(a.obs["cluster"].astype(str).nunique())
+
+          # A. Alternate environment with its own HVG selection.
+          a=make_adata()
+          hvg_res,span,attempts=choose_hvg(a)
+          a.var["highly_variable"]=hvg_res["highly_variable"].to_numpy()
+          alt_hvg_ids=a.var.loc[a.var["highly_variable"],"gene_id"].astype(str).tolist()
+          alt_set=set(alt_hvg_ids)
+          jacc=len(current_hvg & alt_set)/len(current_hvg | alt_set)
+          same_hvg=(current_hvg==alt_set)
+          sc.pp.normalize_total(a,target_sum=1e4)
+          sc.pp.log1p(a)
+          a=a[:,a.var["highly_variable"].to_numpy(dtype=bool)].copy()
+          P_alt,H_alt,n_alt=pca_harmony_cluster(a)
+          np.save("/tmp/GSE157827_PCA50_ALT_OWNHVG.npy",P_alt,allow_pickle=False)
+          del a,P_alt,H_alt
+          gc.collect()
+
+          # B. Alternate environment but force the exact current 1,000 HVGs.
+          b=make_adata()
+          mask=b.var["gene_id"].astype(str).isin(current_hvg).to_numpy()
+          assert int(mask.sum())==1000
+          sc.pp.normalize_total(b,target_sum=1e4)
+          sc.pp.log1p(b)
+          b=b[:,mask].copy()
+          sc.pp.scale(b,zero_center=True,max_value=10)
+          b.X=np.asarray(b.X,dtype=np.float32)
+          np.save("/tmp/GSE157827_SCALED_ALT_FIXED_CURRENT_HVG.npy",b.X,allow_pickle=False)
+          sc.tl.pca(b,n_comps=50,svd_solver="randomized",random_state=SEED)
+          P_fixed=np.asarray(b.obsm["X_pca"],dtype=np.float64)
+          np.save("/tmp/GSE157827_PCA50_ALT_FIXED_CURRENT_HVG.npy",P_fixed,allow_pickle=False)
+          ho=harmonypy.run_harmony(P_fixed,b.obs,"donor_id",max_iter_harmony=30,random_state=0)
+          Z=np.asarray(ho.Z_corr,dtype=np.float64)
+          if Z.shape==(50,len(b)): Z=Z.T
+          b.obsm["X_harmony20"]=Z[:,:20].astype(np.float32)
+          sc.pp.neighbors(b,n_neighbors=20,use_rep="X_harmony20",metric="euclidean",random_state=SEED)
+          sc.tl.leiden(b,resolution=1.0,random_state=SEED,key_added="cluster",flavor="igraph",n_iterations=2,directed=False)
+          n_fixed=int(b.obs["cluster"].astype(str).nunique())
+
+          result={
+            "alt_hvg_span":span,
+            "alt_hvg_attempts":attempts,
+            "hvg_exact_same_set":same_hvg,
+            "hvg_overlap":int(len(current_hvg & alt_set)),
+            "hvg_union":int(len(current_hvg | alt_set)),
+            "hvg_jaccard":float(jacc),
+            "alt_own_hvg_n_clusters":n_alt,
+            "alt_fixed_current_hvg_n_clusters":n_fixed,
+          }
+          Path("/tmp/alt_upstream_result.json").write_text(json.dumps(result,indent=2))
+          Path("/tmp/alt_hvg_ids.txt").write_text("\n".join(sorted(alt_set))+"\n")
+          print("ALT_UPSTREAM_RESULT",json.dumps(result,indent=2))
+          PY
+
+      - name: Compare normalization-scale and PCA separately
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, numpy as np, pandas as pd
+          import anndata as ad, scanpy as sc, harmonypy
+
+          SEED=20260914
+          C=np.load("/tmp/GSE157827_SCALED_CURRENT_FIXED_CURRENT_HVG.npy",mmap_mode="r")
+          A=np.load("/tmp/GSE157827_SCALED_ALT_FIXED_CURRENT_HVG.npy",mmap_mode="r")
+          assert C.shape==A.shape==(169506,1000)
+
+          # Directly test whether normalization/log/scale differs with identical raw data + HVGs.
+          d=np.asarray(C,dtype=np.float64)-np.asarray(A,dtype=np.float64)
+          scale_cmp={
+            "exact_equal":bool(np.array_equal(C,A)),
+            "allclose_1e-7":bool(np.allclose(C,A,rtol=1e-7,atol=1e-7)),
+            "max_abs_diff":float(np.max(np.abs(d))),
+            "mean_abs_diff":float(np.mean(np.abs(d))),
+          }
+          del d
+
+          # Hold the alternate scaled matrix fixed and change PCA implementation only.
+          obs=pd.read_csv("/tmp/GSE157827_PREHVG_OBS.csv.gz")
+          x=np.asarray(A,dtype=np.float32)
+          q=ad.AnnData(X=x,obs=obs.set_index("cell_uid",drop=False).copy())
+          sc.tl.pca(q,n_comps=50,svd_solver="randomized",random_state=SEED)
+          P_current_on_alt_scaled=np.asarray(q.obsm["X_pca"],dtype=np.float64)
+          np.save("/tmp/GSE157827_PCA50_CURRENT_ON_ALT_SCALED.npy",P_current_on_alt_scaled,allow_pickle=False)
+
+          P_alt=np.load("/tmp/GSE157827_PCA50_ALT_FIXED_CURRENT_HVG.npy")
+          pc_corr=[]
+          for k in range(50):
+              r=np.corrcoef(P_alt[:,k],P_current_on_alt_scaled[:,k])[0,1]
+              pc_corr.append(float(abs(r)))
+
+          ho=harmonypy.run_harmony(P_current_on_alt_scaled,q.obs,"donor_id",max_iter_harmony=30,random_state=0)
+          Z=np.asarray(ho.Z_corr,dtype=np.float64)
+          if Z.shape==(50,len(q)): Z=Z.T
+          q.obsm["X_harmony20"]=Z[:,:20].astype(np.float32)
+          sc.pp.neighbors(q,n_neighbors=20,use_rep="X_harmony20",metric="euclidean",random_state=SEED)
+          sc.tl.leiden(q,resolution=1.0,random_state=SEED,key_added="cluster",flavor="igraph",n_iterations=2,directed=False)
+
+          pca_cmp={
+            "abs_pc_corr_min":float(min(pc_corr)),
+            "abs_pc_corr_median":float(np.median(pc_corr)),
+            "abs_pc_corr_first20_min":float(min(pc_corr[:20])),
+            "current_PCA_on_alt_scaled_n_clusters":int(q.obs["cluster"].astype(str).nunique()),
+          }
+
+          current=np.load("/tmp/GSE157827_PCA50_CURRENT.npy")
+          # Same-HVG full current vs alternate PCA: sign-insensitive column correlations.
+          cross=[]
+          for k in range(50):
+              cross.append(float(abs(np.corrcoef(current[:,k],P_alt[:,k])[0,1])))
+
+          alt=json.loads(Path("/tmp/alt_upstream_result.json").read_text())
+          out={
+            "HVG":alt,
+            "normalization_log_scale_same_HVG":scale_cmp,
+            "PCA_same_scaled_input":pca_cmp,
+            "current_vs_alt_fixedHVG_abs_pc_corr_min":float(min(cross)),
+            "current_vs_alt_fixedHVG_abs_pc_corr_median":float(np.median(cross)),
+          }
+          Path("/tmp/final_hvg_norm_pca_audit.json").write_text(json.dumps(out,indent=2))
+          print("FINAL_HVG_NORM_PCA_AUDIT",json.dumps(out,indent=2))
+          PY
+
+      - name: Collect focused audit
+        if: always()
+        run: |
+          mkdir -p /tmp/hvg_norm_pca_audit
+          cp /tmp/current_build.log /tmp/hvg_norm_pca_audit/ 2>/dev/null || true
+          cp /tmp/current_reference.json /tmp/hvg_norm_pca_audit/ 2>/dev/null || true
+          cp /tmp/alt_upstream_result.json /tmp/hvg_norm_pca_audit/ 2>/dev/null || true
+          cp /tmp/final_hvg_norm_pca_audit.json /tmp/hvg_norm_pca_audit/ 2>/dev/null || true
+          cp /tmp/alt_hvg_ids.txt /tmp/hvg_norm_pca_audit/ 2>/dev/null || true
+          ROOT="/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST/GSE157827_AD_replication/annotation_provisional"
+          cp "$ROOT/GSE157827_DISEASE_BLIND_HVG1000_v1.csv" /tmp/hvg_norm_pca_audit/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gse157827-hvg-norm-pca-audit
+          path: /tmp/hvg_norm_pca_audit
+          retention-days: 7
