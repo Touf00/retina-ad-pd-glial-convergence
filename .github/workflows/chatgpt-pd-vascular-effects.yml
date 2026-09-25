@@ -97,10 +97,9 @@ jobs:
           if "row" in [str(x).strip().lower() for x in genes_tbl.iloc[0].tolist()] or any(k in first for k in ["gene_id","gene id","gene_name","gene name","symbol"]):
             print("Dropping detected gene-table header row:", genes_tbl.iloc[0].tolist())
             genes_tbl=genes_tbl.iloc[1:].reset_index(drop=True)
-          if genes_tbl.shape[1]>=2:
-            gene_names=genes_tbl.iloc[:,1].astype(str).tolist()
-          else:
-            gene_names=genes_tbl.iloc[:,0].astype(str).tolist()
+          # After dropping the header row, column 0 is the gene symbol.
+          # Column 1 is only the numeric row index and must not be used as a gene identifier.
+          gene_names=genes_tbl.iloc[:,0].astype(str).tolist()
           n_genes=len(gene_names)
           print("genes",n_genes,"cells",len(cells),"first_gene",gene_names[0],"last_gene",gene_names[-1])
 
