@@ -170,8 +170,22 @@ jobs:
           cp /tmp/retina_execution.log /tmp/audit_bundle/ 2>/dev/null || true
           cp /tmp/RETINA_ND_FRESH_EXECUTED.ipynb /tmp/audit_bundle/ 2>/dev/null || true
           ROOT="/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST"
-          find "$ROOT" -maxdepth 6 -type f \( -name "*FINAL*QC*" -o -name "*CONVERGENCE*SUMMARY*" -o -name "*R3*NULL*" -o -name "*CANDIDATE*RANKING*" -o -name "*CLUSTER_MARKER_SCORES*" -o -name "*FINAL_TARGET_CELLTYPE_CLUSTER_MAPPING*" -o -name "*EFFECTS*" -o -name "*effect*" -o -name "release_environment_snapshot.json" \) -size -20M -exec cp {} /tmp/audit_bundle/ \; 2>/dev/null || true
+          find "$ROOT" -maxdepth 6 -type f \( -name "*FINAL*QC*" -o -name "*CONVERGENCE*SUMMARY*" -o -name "*R3*NULL*" -o -name "*CANDIDATE*RANKING*" -o -name "*CLUSTER_MARKER_SCORES*" -o -name "*FINAL_TARGET_CELLTYPE_CLUSTER_MAPPING*" -o -name "*STEP26A1_OBS_CLUSTER_ASSIGNMENTS*" -o -name "*STEP26A1_HARMONY20*" -o -name "*DISEASE_BLIND_HVG1000*" -o -name "*STEP26A1_DISEASE_BLIND_CLUSTERING*.json" -o -name "*EFFECTS*" -o -name "*effect*" -o -name "release_environment_snapshot.json" \) -size -20M -exec cp {} /tmp/audit_bundle/ \; 2>/dev/null || true
           find "$ROOT/logs" -maxdepth 1 -type f -size -5M -exec cp {} /tmp/audit_bundle/ \; 2>/dev/null || true
+          python -m pip freeze > /tmp/audit_bundle/pip_freeze.txt 2>&1 || true
+          python - <<'PY' > /tmp/audit_bundle/numerical_runtime.txt 2>&1
+          import os, platform
+          import numpy as np
+          import scipy
+          print("platform", platform.platform())
+          print("python", platform.python_version())
+          print("processor", platform.processor())
+          print("numpy", np.__version__)
+          print("scipy", scipy.__version__)
+          for key in ["OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMBA_NUM_THREADS"]:
+              print(key, os.environ.get(key))
+          np.show_config()
+          PY
           df -h > /tmp/audit_bundle/disk_final.txt
           free -h > /tmp/audit_bundle/memory_final.txt
           ls -lah /tmp/audit_bundle
@@ -183,3 +197,4 @@ jobs:
           path: /tmp/audit_bundle/
           if-no-files-found: warn
           retention-days: 7
+
