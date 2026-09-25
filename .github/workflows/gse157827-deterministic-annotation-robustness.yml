@@ -1,0 +1,199 @@
+name: GSE157827 deterministic annotation robustness
+
+on:
+  push:
+    branches: [reproducibility-audit]
+    paths:
+      - ".github/workflows/gse157827-deterministic-annotation-robustness.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  annotation-robustness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      RETINA_ND_ROOT: /tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+      BLIS_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMBA_NUM_THREADS: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.15"
+
+      - name: Install analysis environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            numpy==2.1.3 pandas==2.3.3 scipy==1.16.3 \
+            anndata==0.13.3.post0 scanpy==1.12.4 scikit-learn==1.6.1 \
+            scikit-misc==0.5.2 harmonypy==2.0.0 leidenalg==0.12.0 igraph==1.0.0 \
+            requests openpyxl h5py pypdf matplotlib gseapy nbconvert jupyter
+
+      - name: Build deterministic annotation notebook
+        run: |
+          mkdir -p "$RETINA_ND_ROOT/locks"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root=Path("/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST")
+          locks=root/"locks"
+          (locks/"AD_BRAIN_DATASET_ROLES_v1.json").write_text(json.dumps({
+            "status":"AD_DATASET_ROLES_FROZEN_BEFORE_DISEASE_EXPRESSION",
+            "primary_replication":{"dataset":"GSE157827"},
+            "primary_discovery":{"dataset":"GSE174367"}
+          },indent=2))
+          (locks/"GSE174367_AD_DISCOVERY_FINAL_ROBUSTNESS_FREEZE_v1.json").write_text(json.dumps({
+            "status":"AD_DISCOVERY_FINAL_ROBUSTNESS_FROZEN",
+            "AD_replication_performed":False,
+            "AD_PD_convergence_performed":False
+          },indent=2))
+
+          nb=json.loads(Path("RETINA_ND_bioRxiv_release.ipynb").read_text())
+          markers=[
+            "STEP 24 — GSE157827 AD REPLICATION RAW-DATA AUDIT",
+            "STEP 24C — COMPLETE GSE157827 RAW REPLICATION AUDIT",
+            "STEP 25 — GSE157827 REPLICATION DONOR METADATA",
+            "RETINA-ND — STEP 26A1",
+            "RETINA-ND — STEP 26A2",
+          ]
+          cells=[]
+          for marker in markers:
+              hits=[c for c in nb["cells"] if marker in "".join(c.get("source",[]))]
+              if len(hits)!=1:
+                  raise RuntimeError(f"{marker}: got {len(hits)}")
+              cell=dict(hits[0])
+              src="".join(cell["source"]).replace("/content/drive/MyDrive/RETINA_ND_V2",str(root))
+
+              if marker=="RETINA-ND — STEP 26A1":
+                  start=src.index("sc.pp.neighbors(")
+                  end=src.index("\n\n\nsc.tl.leiden(",start)
+                  replacement='''from sklearn.neighbors import KNeighborsTransformer
+
+exact_transformer = KNeighborsTransformer(
+    n_neighbors=N_NEIGHBORS,
+    mode="distance",
+    metric="euclidean",
+    algorithm="brute",
+    n_jobs=1,
+)
+
+sc.pp.neighbors(
+    adata_hvg,
+    use_rep="X_harmony20",
+    method="umap",
+    transformer=exact_transformer,
+)
+'''
+                  src=src[:start]+replacement+src[end:]
+                  if "KNeighborsTransformer" not in src:
+                      raise RuntimeError("Exact-neighbor patch failed")
+
+              cell["source"]=src.splitlines(keepends=True)
+              cell["outputs"]=[]
+              cell["execution_count"]=None
+              cells.append(cell)
+
+          mini={
+            "cells":cells,
+            "metadata":nb.get("metadata",{}),
+            "nbformat":nb["nbformat"],
+            "nbformat_minor":nb["nbformat_minor"],
+          }
+          Path("/tmp/GSE157827_DETERMINISTIC_ANNOTATION.ipynb").write_text(json.dumps(mini))
+          print("MINI_CELLS",len(cells))
+          PY
+
+      - name: Execute through provisional annotation
+        run: |
+          set -o pipefail
+          jupyter nbconvert \
+            --to notebook \
+            --execute /tmp/GSE157827_DETERMINISTIC_ANNOTATION.ipynb \
+            --output /tmp/GSE157827_DETERMINISTIC_ANNOTATION_EXECUTED.ipynb \
+            --ExecutePreprocessor.timeout=6600 \
+            2>&1 | tee /tmp/deterministic_annotation.log
+
+      - name: Apply final mapping rule without archival cluster-ID assertions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, pandas as pd, numpy as np
+
+          root=Path("/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST")
+          anno=root/"GSE157827_AD_replication"/"annotation_provisional"
+          score=pd.read_csv(anno/"GSE157827_DISEASE_BLIND_CLUSTER_MARKER_SCORES_PROVISIONAL_v1.csv")
+          cells=pd.read_csv(anno/"GSE157827_DISEASE_BLIND_CELL_LABELS_PROVISIONAL_v1.csv.gz")
+
+          lm=score["low_margin_lt_0.5"]
+          if not pd.api.types.is_bool_dtype(lm):
+              lm=lm.astype(str).str.strip().str.lower().map({"true":True,"false":False,"1":True,"0":False})
+          if lm.isna().any():
+              raise RuntimeError("Could not parse low-margin flag")
+          score["low_margin"]=lm.astype(bool)
+
+          score["rule_final"]="Other"
+          score.loc[(score["broad_label_candidate"]=="Astro") & ~score["low_margin"],"rule_final"]="Astro"
+          score.loc[(score["broad_label_candidate"]=="Micro") & ~score["low_margin"],"rule_final"]="Micro"
+          score.loc[(score["broad_label_candidate"]=="Oligo") & (score["oligo_lineage_candidate"]=="OPC_candidate"),"rule_final"]="OPC"
+          score.loc[(score["broad_label_candidate"]=="Oligo") & (score["oligo_lineage_candidate"]=="Oligo_candidate") & ~score["low_margin"],"rule_final"]="Oligo"
+
+          cmap=score.set_index(score["cluster"].astype(str))["rule_final"].to_dict()
+          cells["cluster"]=cells["cluster"].astype(str)
+          cells["rule_final"]=cells["cluster"].map(cmap)
+          if cells["rule_final"].isna().any():
+              raise RuntimeError("Unmapped cells")
+
+          order=["Astro","Micro","OPC","Oligo","Other"]
+          counts=cells["rule_final"].value_counts().reindex(order,fill_value=0).astype(int)
+          donor_counts=pd.crosstab(cells["donor_id"].astype(str),cells["rule_final"]).reindex(columns=order,fill_value=0)
+
+          archival={"Astro":18688,"Micro":7909,"OPC":1303,"Oligo":41105,"Other":100501}
+          fresh31={"Astro":18768,"Micro":7988,"OPC":466,"Oligo":41768,"Other":100516}
+
+          comparison={}
+          for ct in order:
+              v=int(counts[ct])
+              comparison[ct]={
+                  "deterministic_exact":v,
+                  "archival_expected":archival[ct],
+                  "delta_vs_archival":v-archival[ct],
+                  "pct_delta_vs_archival":100.0*(v-archival[ct])/archival[ct],
+                  "fresh_default_31":fresh31[ct],
+                  "delta_vs_fresh31":v-fresh31[ct],
+                  "pct_delta_vs_fresh31":100.0*(v-fresh31[ct])/fresh31[ct],
+                  "donor_min":int(donor_counts[ct].min()),
+                  "donor_median":float(donor_counts[ct].median()),
+                  "donor_max":int(donor_counts[ct].max()),
+              }
+
+          result={
+              "n_clusters":int(len(score)),
+              "n_low_margin_clusters":int(score["low_margin"].sum()),
+              "rule_final_counts":{k:int(v) for k,v in counts.items()},
+              "comparison":comparison,
+              "target_fraction":float(counts[["Astro","Micro","OPC","Oligo"]].sum()/len(cells)),
+          }
+          print("DETERMINISTIC_ANNOTATION_RESULT",json.dumps(result,indent=2))
+          Path("/tmp/deterministic_annotation_result.json").write_text(json.dumps(result,indent=2))
+          score.to_csv("/tmp/deterministic_cluster_scores.csv",index=False)
+          PY
+
+      - name: Upload aggregate robustness result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gse157827-deterministic-annotation-robustness
+          path: |
+            /tmp/deterministic_annotation_result.json
+            /tmp/deterministic_cluster_scores.csv
+          retention-days: 7
