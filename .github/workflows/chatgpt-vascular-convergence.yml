@@ -169,7 +169,7 @@ jobs:
           vc=cell[cell.ct.notna()].copy()
           genes_tbl=pd.read_csv(one(rp,"IPDCO_hg_midbrain_genes.tsv"),sep="\t",header=None,dtype=str)
           first=" | ".join(genes_tbl.iloc[0].fillna("").astype(str).tolist()).lower()
-          if first.strip()=="row" or first.startswith("row |") or any(k in first for k in ["gene_id","gene_name","symbol"]):
+          if "row" in [str(x).strip().lower() for x in genes_tbl.iloc[0].tolist()] or any(k in first for k in ["gene_id","gene name","gene_name","symbol"]):
               genes_tbl=genes_tbl.iloc[1:].reset_index(drop=True)
           gene_names=(genes_tbl.iloc[:,1] if genes_tbl.shape[1]>=2 else genes_tbl.iloc[:,0]).astype(str).tolist()
           umi=one(rp,"IPDCO_hg_midbrain_UMI.tsv")
