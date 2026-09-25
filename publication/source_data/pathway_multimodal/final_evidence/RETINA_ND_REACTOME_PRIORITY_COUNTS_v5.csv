@@ -1,0 +1,6 @@
+priority_group,n_pathways
+R3_recurrent_directional,665
+R4_two_celltype_directional,441
+R5_single_directional,322
+R6_nonconcordant,94
+R2_single_celltype_AD_PD_FDR,29

@@ -1,0 +1,5 @@
+cell_type,genes,brain_AD_PD_same_direction,retina_expressed,AD_retina_measured,PD_aqueous_measured,both_ocular_measured,dual_ocular_directional,AD_retina_nominal_support,AD_retina_FDR_support,PD_aqueous_nominal_support,PD_aqueous_FDR_support,dual_ocular_nominal_support,dual_ocular_FDR_support,multimodal_directional_support,multimodal_nominal_support,multimodal_FDR_support
+Astro,15423,8913,13027,4178,3820,1920,414,89,1,886,590,6,0,251,4,0
+Micro,14975,7895,12870,4141,3862,1906,440,86,1,918,624,10,0,235,6,0
+OPC,14842,8509,12679,4101,3720,1869,463,91,1,832,524,8,0,229,3,0
+Oligo,14241,8643,12132,3980,3527,1819,411,83,1,779,494,9,0,241,6,0

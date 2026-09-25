@@ -1,0 +1,11 @@
+gene_symbol,pathway,shared_AD_PD_leading_edge,n_original_pathway_links,pathway_rank,priority_group,n_pathways_represented,n_convergent_FDR_celltypes,n_same_direction_celltypes
+CD38,Metabolism of vitamins and cofactors,False,1,585,R3_recurrent_directional,1,0,3
+CTCF,Activation of HOX genes during differentiation,False,2,541,R3_recurrent_directional,2,0,3
+CTCF,"CHD6, CHD7, CHD8, CHD9 subfamily",False,1,274,R3_recurrent_directional,1,0,3
+CTCF,HATs acetylate histones,False,1,128,R3_recurrent_directional,3,0,4
+GAPDH,Gluconeogenesis,True,2,38,R3_recurrent_directional,2,0,4
+GAPDH,Metabolism of carbohydrates and carbohydrate derivatives,True,2,101,R3_recurrent_directional,3,0,4
+ITGAM,Extracellular matrix organization,False,1,257,R3_recurrent_directional,1,0,3
+NDUFB10,Aerobic respiration and respiratory electron transport,True,2,63,R3_recurrent_directional,2,0,4
+NT5C,Nucleotide catabolism,True,3,77,R3_recurrent_directional,3,0,4
+XYLB,Metabolism of carbohydrates and carbohydrate derivatives,True,1,101,R3_recurrent_directional,3,0,4

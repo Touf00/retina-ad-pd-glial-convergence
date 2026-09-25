@@ -1,0 +1,10 @@
+pathway,n_selected_genes,n_shared_AD_PD_genes,pathway_rank,priority_group,n_pathways_represented,n_convergent_FDR_celltypes,n_same_direction_celltypes
+Metabolism of carbohydrates and carbohydrate derivatives,2,2,101,R3_recurrent_directional,3,0,4
+Gluconeogenesis,1,1,38,R3_recurrent_directional,2,0,4
+Aerobic respiration and respiratory electron transport,1,1,63,R3_recurrent_directional,2,0,4
+Nucleotide catabolism,1,1,77,R3_recurrent_directional,3,0,4
+HATs acetylate histones,1,0,128,R3_recurrent_directional,3,0,4
+Extracellular matrix organization,1,0,257,R3_recurrent_directional,1,0,3
+"CHD6, CHD7, CHD8, CHD9 subfamily",1,0,274,R3_recurrent_directional,1,0,3
+Activation of HOX genes during differentiation,1,0,541,R3_recurrent_directional,2,0,3
+Metabolism of vitamins and cofactors,1,0,585,R3_recurrent_directional,1,0,3

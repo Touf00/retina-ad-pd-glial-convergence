@@ -1,0 +1,11 @@
+metric,value
+observed_R1,0.0
+observed_R2,29.0
+observed_R3,665.0
+null_R3_mean,441.1908
+null_R3_median,441.0
+null_R3_2.5pct,409.0
+null_R3_97.5pct,473.0
+R3_empirical_P,9.999000099990002e-05
+n_permutations,10000.0
+seed,20260917.0

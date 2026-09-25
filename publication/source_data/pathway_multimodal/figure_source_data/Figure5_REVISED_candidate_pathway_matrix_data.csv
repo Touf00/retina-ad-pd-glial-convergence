@@ -1,0 +1,109 @@
+pathway,pathway_rank,pathway_priority,n_pathways_represented,gene_symbol,candidate_rank,candidate_priority,link_type,shared_AD_PD_leading_edge,n_original_pathway_links
+Metabolism of carbohydrates and carbohydrate derivatives,101,R3_recurrent_directional,3,SCAMP5,1,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of carbohydrates and carbohydrate derivatives,101,R3_recurrent_directional,3,XYLB,2,P1_recurrent_dual_ocular_nominal,shared_AD_PD_leading_edge,True,1
+Metabolism of carbohydrates and carbohydrate derivatives,101,R3_recurrent_directional,3,RABEPK,3,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of carbohydrates and carbohydrate derivatives,101,R3_recurrent_directional,3,ITGAM,4,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of carbohydrates and carbohydrate derivatives,101,R3_recurrent_directional,3,CD38,5,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of carbohydrates and carbohydrate derivatives,101,R3_recurrent_directional,3,CTCF,6,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of carbohydrates and carbohydrate derivatives,101,R3_recurrent_directional,3,UBTD2,7,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of carbohydrates and carbohydrate derivatives,101,R3_recurrent_directional,3,NAPEPLD,8,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of carbohydrates and carbohydrate derivatives,101,R3_recurrent_directional,3,GAPDH,9,P3_recurrent_dual_ocular_directional,shared_AD_PD_leading_edge,True,2
+Metabolism of carbohydrates and carbohydrate derivatives,101,R3_recurrent_directional,3,STX1B,10,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Metabolism of carbohydrates and carbohydrate derivatives,101,R3_recurrent_directional,3,NDUFB10,11,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Metabolism of carbohydrates and carbohydrate derivatives,101,R3_recurrent_directional,3,NT5C,12,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Gluconeogenesis,38,R3_recurrent_directional,2,SCAMP5,1,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Gluconeogenesis,38,R3_recurrent_directional,2,XYLB,2,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Gluconeogenesis,38,R3_recurrent_directional,2,RABEPK,3,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Gluconeogenesis,38,R3_recurrent_directional,2,ITGAM,4,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Gluconeogenesis,38,R3_recurrent_directional,2,CD38,5,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Gluconeogenesis,38,R3_recurrent_directional,2,CTCF,6,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Gluconeogenesis,38,R3_recurrent_directional,2,UBTD2,7,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Gluconeogenesis,38,R3_recurrent_directional,2,NAPEPLD,8,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Gluconeogenesis,38,R3_recurrent_directional,2,GAPDH,9,P3_recurrent_dual_ocular_directional,shared_AD_PD_leading_edge,True,2
+Gluconeogenesis,38,R3_recurrent_directional,2,STX1B,10,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Gluconeogenesis,38,R3_recurrent_directional,2,NDUFB10,11,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Gluconeogenesis,38,R3_recurrent_directional,2,NT5C,12,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Aerobic respiration and respiratory electron transport,63,R3_recurrent_directional,2,SCAMP5,1,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Aerobic respiration and respiratory electron transport,63,R3_recurrent_directional,2,XYLB,2,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Aerobic respiration and respiratory electron transport,63,R3_recurrent_directional,2,RABEPK,3,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Aerobic respiration and respiratory electron transport,63,R3_recurrent_directional,2,ITGAM,4,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Aerobic respiration and respiratory electron transport,63,R3_recurrent_directional,2,CD38,5,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Aerobic respiration and respiratory electron transport,63,R3_recurrent_directional,2,CTCF,6,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Aerobic respiration and respiratory electron transport,63,R3_recurrent_directional,2,UBTD2,7,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Aerobic respiration and respiratory electron transport,63,R3_recurrent_directional,2,NAPEPLD,8,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Aerobic respiration and respiratory electron transport,63,R3_recurrent_directional,2,GAPDH,9,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Aerobic respiration and respiratory electron transport,63,R3_recurrent_directional,2,STX1B,10,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Aerobic respiration and respiratory electron transport,63,R3_recurrent_directional,2,NDUFB10,11,P3_recurrent_dual_ocular_directional,shared_AD_PD_leading_edge,True,2
+Aerobic respiration and respiratory electron transport,63,R3_recurrent_directional,2,NT5C,12,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Nucleotide catabolism,77,R3_recurrent_directional,3,SCAMP5,1,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Nucleotide catabolism,77,R3_recurrent_directional,3,XYLB,2,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Nucleotide catabolism,77,R3_recurrent_directional,3,RABEPK,3,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Nucleotide catabolism,77,R3_recurrent_directional,3,ITGAM,4,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Nucleotide catabolism,77,R3_recurrent_directional,3,CD38,5,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Nucleotide catabolism,77,R3_recurrent_directional,3,CTCF,6,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Nucleotide catabolism,77,R3_recurrent_directional,3,UBTD2,7,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Nucleotide catabolism,77,R3_recurrent_directional,3,NAPEPLD,8,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Nucleotide catabolism,77,R3_recurrent_directional,3,GAPDH,9,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Nucleotide catabolism,77,R3_recurrent_directional,3,STX1B,10,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Nucleotide catabolism,77,R3_recurrent_directional,3,NDUFB10,11,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Nucleotide catabolism,77,R3_recurrent_directional,3,NT5C,12,P3_recurrent_dual_ocular_directional,shared_AD_PD_leading_edge,True,3
+HATs acetylate histones,128,R3_recurrent_directional,3,SCAMP5,1,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+HATs acetylate histones,128,R3_recurrent_directional,3,XYLB,2,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+HATs acetylate histones,128,R3_recurrent_directional,3,RABEPK,3,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+HATs acetylate histones,128,R3_recurrent_directional,3,ITGAM,4,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+HATs acetylate histones,128,R3_recurrent_directional,3,CD38,5,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+HATs acetylate histones,128,R3_recurrent_directional,3,CTCF,6,P1_recurrent_dual_ocular_nominal,broader_leading_edge_union,False,1
+HATs acetylate histones,128,R3_recurrent_directional,3,UBTD2,7,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+HATs acetylate histones,128,R3_recurrent_directional,3,NAPEPLD,8,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+HATs acetylate histones,128,R3_recurrent_directional,3,GAPDH,9,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+HATs acetylate histones,128,R3_recurrent_directional,3,STX1B,10,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+HATs acetylate histones,128,R3_recurrent_directional,3,NDUFB10,11,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+HATs acetylate histones,128,R3_recurrent_directional,3,NT5C,12,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Extracellular matrix organization,257,R3_recurrent_directional,1,SCAMP5,1,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Extracellular matrix organization,257,R3_recurrent_directional,1,XYLB,2,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Extracellular matrix organization,257,R3_recurrent_directional,1,RABEPK,3,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Extracellular matrix organization,257,R3_recurrent_directional,1,ITGAM,4,P1_recurrent_dual_ocular_nominal,broader_leading_edge_union,False,1
+Extracellular matrix organization,257,R3_recurrent_directional,1,CD38,5,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Extracellular matrix organization,257,R3_recurrent_directional,1,CTCF,6,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Extracellular matrix organization,257,R3_recurrent_directional,1,UBTD2,7,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Extracellular matrix organization,257,R3_recurrent_directional,1,NAPEPLD,8,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Extracellular matrix organization,257,R3_recurrent_directional,1,GAPDH,9,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Extracellular matrix organization,257,R3_recurrent_directional,1,STX1B,10,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Extracellular matrix organization,257,R3_recurrent_directional,1,NDUFB10,11,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Extracellular matrix organization,257,R3_recurrent_directional,1,NT5C,12,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+"CHD6, CHD7, CHD8, CHD9 subfamily",274,R3_recurrent_directional,1,SCAMP5,1,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+"CHD6, CHD7, CHD8, CHD9 subfamily",274,R3_recurrent_directional,1,XYLB,2,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+"CHD6, CHD7, CHD8, CHD9 subfamily",274,R3_recurrent_directional,1,RABEPK,3,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+"CHD6, CHD7, CHD8, CHD9 subfamily",274,R3_recurrent_directional,1,ITGAM,4,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+"CHD6, CHD7, CHD8, CHD9 subfamily",274,R3_recurrent_directional,1,CD38,5,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+"CHD6, CHD7, CHD8, CHD9 subfamily",274,R3_recurrent_directional,1,CTCF,6,P1_recurrent_dual_ocular_nominal,broader_leading_edge_union,False,1
+"CHD6, CHD7, CHD8, CHD9 subfamily",274,R3_recurrent_directional,1,UBTD2,7,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+"CHD6, CHD7, CHD8, CHD9 subfamily",274,R3_recurrent_directional,1,NAPEPLD,8,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+"CHD6, CHD7, CHD8, CHD9 subfamily",274,R3_recurrent_directional,1,GAPDH,9,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+"CHD6, CHD7, CHD8, CHD9 subfamily",274,R3_recurrent_directional,1,STX1B,10,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+"CHD6, CHD7, CHD8, CHD9 subfamily",274,R3_recurrent_directional,1,NDUFB10,11,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+"CHD6, CHD7, CHD8, CHD9 subfamily",274,R3_recurrent_directional,1,NT5C,12,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Activation of HOX genes during differentiation,541,R3_recurrent_directional,2,SCAMP5,1,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Activation of HOX genes during differentiation,541,R3_recurrent_directional,2,XYLB,2,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Activation of HOX genes during differentiation,541,R3_recurrent_directional,2,RABEPK,3,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Activation of HOX genes during differentiation,541,R3_recurrent_directional,2,ITGAM,4,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Activation of HOX genes during differentiation,541,R3_recurrent_directional,2,CD38,5,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Activation of HOX genes during differentiation,541,R3_recurrent_directional,2,CTCF,6,P1_recurrent_dual_ocular_nominal,broader_leading_edge_union,False,2
+Activation of HOX genes during differentiation,541,R3_recurrent_directional,2,UBTD2,7,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Activation of HOX genes during differentiation,541,R3_recurrent_directional,2,NAPEPLD,8,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Activation of HOX genes during differentiation,541,R3_recurrent_directional,2,GAPDH,9,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Activation of HOX genes during differentiation,541,R3_recurrent_directional,2,STX1B,10,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Activation of HOX genes during differentiation,541,R3_recurrent_directional,2,NDUFB10,11,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Activation of HOX genes during differentiation,541,R3_recurrent_directional,2,NT5C,12,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Metabolism of vitamins and cofactors,585,R3_recurrent_directional,1,SCAMP5,1,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of vitamins and cofactors,585,R3_recurrent_directional,1,XYLB,2,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of vitamins and cofactors,585,R3_recurrent_directional,1,RABEPK,3,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of vitamins and cofactors,585,R3_recurrent_directional,1,ITGAM,4,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of vitamins and cofactors,585,R3_recurrent_directional,1,CD38,5,P1_recurrent_dual_ocular_nominal,broader_leading_edge_union,False,1
+Metabolism of vitamins and cofactors,585,R3_recurrent_directional,1,CTCF,6,P1_recurrent_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of vitamins and cofactors,585,R3_recurrent_directional,1,UBTD2,7,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of vitamins and cofactors,585,R3_recurrent_directional,1,NAPEPLD,8,P2_single_dual_ocular_nominal,no_selected_R2_R3_link,False,0
+Metabolism of vitamins and cofactors,585,R3_recurrent_directional,1,GAPDH,9,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Metabolism of vitamins and cofactors,585,R3_recurrent_directional,1,STX1B,10,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Metabolism of vitamins and cofactors,585,R3_recurrent_directional,1,NDUFB10,11,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0
+Metabolism of vitamins and cofactors,585,R3_recurrent_directional,1,NT5C,12,P3_recurrent_dual_ocular_directional,no_selected_R2_R3_link,False,0

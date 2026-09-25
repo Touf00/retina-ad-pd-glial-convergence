@@ -1,0 +1,5 @@
+cell_type,n_rows,raw_dual_ocular_nominal,raw_dual_ocular_FDR,multimodal_directional,multimodal_nominal,multimodal_FDR,class_A,class_B,class_C,class_D
+Astro,15423,6,0,251,4,0,0,4,247,277
+Micro,14975,10,0,235,6,0,0,6,229,262
+OPC,14842,8,0,229,3,0,0,3,226,249
+Oligo,14241,9,0,241,6,0,0,6,235,248

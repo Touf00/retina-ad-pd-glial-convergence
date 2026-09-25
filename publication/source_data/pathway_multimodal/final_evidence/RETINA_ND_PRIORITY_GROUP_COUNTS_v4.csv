@@ -1,0 +1,8 @@
+priority_group,n_unique_genes
+P6_brain_plus_retina_expression,11848
+P7_other,4802
+P5_single_ocular_FDR,588
+P3_recurrent_dual_ocular_directional,276
+P4_single_dual_ocular_directional,223
+P1_recurrent_dual_ocular_nominal,6
+P2_single_dual_ocular_nominal,2
