@@ -1,0 +1,196 @@
+name: ChatGPT external cohort pseudobulk
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-external-pseudobulk.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install pandas numpy scipy requests
+      - name: Build donor pseudobulk and effects
+        shell: bash
+        run: |
+          cat > /tmp/run.py <<'PY'
+          import re, json, requests
+          from pathlib import Path
+          import numpy as np, pandas as pd
+          from scipy.stats import spearmanr
+          OUT=Path("/tmp/external"); OUT.mkdir(exist_ok=True)
+          DL=OUT/"downloads"; DL.mkdir(exist_ok=True)
+
+          def download(url, p):
+              if p.exists() and p.stat().st_size: return
+              with requests.get(url,stream=True,timeout=180) as r:
+                  r.raise_for_status()
+                  with open(p,"wb") as f:
+                      for ch in r.iter_content(4*1024*1024):
+                          if ch:f.write(ch)
+
+          def ols_effect(pb, donor_meta, dx_col="diagnosis", age_col=None, sex_col="sex"):
+              # pb genes x donors; log2 CPM + small pseudocount; vectorized OLS.
+              libs=pb.sum(axis=0).astype(float)
+              cpm=(pb+0.5).div(libs+0.5*pb.shape[0],axis=1)*1e6
+              y=np.log2(cpm+0.5).T.to_numpy() # donor x gene
+              d=donor_meta.loc[pb.columns].copy()
+              cols=[np.ones(len(d)), d[dx_col].astype(float).to_numpy()]
+              names=["Intercept","diagnosis"]
+              if age_col and age_col in d and pd.to_numeric(d[age_col],errors="coerce").notna().all():
+                  a=pd.to_numeric(d[age_col]).to_numpy(float); a=(a-a.mean())/(a.std() or 1)
+                  cols.append(a); names.append("age_z")
+              if sex_col and sex_col in d:
+                  s=d[sex_col].astype(str).str.upper().map({"M":1.0,"MALE":1.0,"F":0.0,"FEMALE":0.0})
+                  if s.notna().all() and s.nunique()>1:
+                      cols.append(s.to_numpy()); names.append("sex_male")
+              X=np.column_stack(cols)
+              beta=np.linalg.pinv(X)@y
+              resid=y-X@beta
+              dof=max(1,len(d)-X.shape[1])
+              s2=(resid**2).sum(axis=0)/dof
+              inv=np.linalg.pinv(X.T@X)
+              se=np.sqrt(np.maximum(0,inv[1,1]*s2))
+              effect=beta[1]
+              z=np.divide(effect,se,out=np.full_like(effect,np.nan),where=se>0)
+              return pd.DataFrame({"gene":pb.index,"effect_log2cpm_ols":effect,"se":se,"z":z,
+                                   "n_donors":len(d),"design":"+".join(names)})
+
+          # ---------- GSE329625 ----------
+          u_meta="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE329nnn/GSE329625/suppl/GSE329625_full_metadata.csv.gz"
+          u_mat="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE329nnn/GSE329625/suppl/GSE329625_processed_gene_matrix.txt.gz"
+          pmeta=DL/"GSE329625_full_metadata.csv.gz"; pmat=DL/"GSE329625_processed_gene_matrix.txt.gz"
+          download(u_meta,pmeta); download(u_mat,pmat)
+          m=pd.read_csv(pmeta)
+          m["cell_id"]=m["Unnamed: 0"].astype(str)
+          m["diagnosis"]=np.where(m["Disease"].eq("CTR"),0,np.where(m["Disease"].isin(["PD_B3-4","PD_B5-6"]),1,np.nan))
+          m=m[m["diagnosis"].notna()].copy()
+          m["canonical"]=m["cell_id"].astype(str)
+          ctmap={"Astrocyte":"Astro","Microglia":"Micro","OPC":"OPC","ODC":"Oligo"}
+          m["ct"]=m["CellType"].map(ctmap)
+          m=m[m["ct"].notna()].copy()
+          cov329=m.groupby(["Sample_v2","Disease","Sex","ct"]).size().rename("n_nuclei").reset_index()
+          cov329.to_csv(OUT/"GSE329625_donor_celltype_coverage.csv",index=False)
+          header=pd.read_csv(pmat,sep="\t",nrows=0).columns.astype(str).tolist()
+          hcanon=[x[1:] if x.startswith("X") else x for x in header]
+          idx={c:i for i,c in enumerate(hcanon)}
+          if not set(m["canonical"]).issubset(idx):
+              miss=list(set(m["canonical"])-set(idx))[:10]; raise RuntimeError(f"GSE329 cell IDs missing: {miss}")
+          targets={}
+          donor_meta={}
+          for ct in ["Astro","Micro","OPC","Oligo"]:
+              sub=m[m.ct.eq(ct)]
+              counts=sub.groupby("Sample_v2").size()
+              elig=counts[counts>=10].index
+              sub=sub[sub.Sample_v2.isin(elig)]
+              donors=sorted(sub.Sample_v2.unique().astype(str))
+              for d in donors:
+                  cellidx=[idx[x] for x in sub.loc[sub.Sample_v2.astype(str).eq(d),"canonical"]]
+                  targets[("329",ct,d)]=cellidx
+              dm=sub.drop_duplicates("Sample_v2").set_index("Sample_v2")
+              donor_meta[("329",ct)]=pd.DataFrame(index=donors,
+                 data={"diagnosis":[int(dm.loc[d,"diagnosis"]) for d in donors],
+                       "sex":[dm.loc[d,"Sex"] for d in donors]})
+          accum={k:[] for k in targets}
+          genes=[]
+          for chunk in pd.read_csv(pmat,sep="\t",index_col=0,chunksize=40):
+              genes.extend(chunk.index.astype(str).tolist())
+              arr=chunk.to_numpy(dtype=np.int64,copy=False)
+              for k,inds in targets.items():
+                  accum[k].append(arr[:,inds].sum(axis=1))
+          genes=pd.Index(genes,name="gene")
+          for ct in ["Astro","Micro","OPC","Oligo"]:
+              donors=donor_meta[("329",ct)].index.tolist()
+              pb=pd.DataFrame({d:np.concatenate(accum[("329",ct,d)]) for d in donors},index=genes)
+              # filter: >=10 raw counts in >=3 donors in each group
+              dm=donor_meta[("329",ct)]
+              g0=dm.index[dm.diagnosis.eq(0)]; g1=dm.index[dm.diagnosis.eq(1)]
+              keep=((pb[g0]>=10).sum(axis=1)>=3)&((pb[g1]>=10).sum(axis=1)>=3)
+              pb=pb.loc[keep]
+              pb.to_csv(OUT/f"GSE329625_{ct}_pseudobulk.csv.gz",compression="gzip")
+              eff=ols_effect(pb,dm)
+              eff.to_csv(OUT/f"GSE329625_{ct}_effects.csv.gz",index=False,compression="gzip")
+
+          # ---------- GSE222494 ----------
+          u_meta="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE222nnn/GSE222494/suppl/GSE222494_BrainFRONTAL_metadata.csv.gz"
+          u_mat="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE222nnn/GSE222494/suppl/GSE222494_BrainFRONTAL_counts.csv.gz"
+          pmeta=DL/"GSE222494_metadata.csv.gz"; pmat=DL/"GSE222494_counts.csv.gz"
+          download(u_meta,pmeta); download(u_mat,pmat)
+          m=pd.read_csv(pmeta,low_memory=False)
+          m=m[m["Diagnosis"].isin(["Control","Sporadic"])].copy()
+          m["diagnosis"]=m["Diagnosis"].map({"Control":0,"Sporadic":1})
+          m["canonical"]=m["Unnamed: 0"].astype(str)
+          ctmap={"Astrocytes":"Astro","Microglia":"Micro","OPCs":"OPC","Oligodendrocytes":"Oligo",
+                 "Endothelial":"Endothelial","Pericytes":"Pericyte"}
+          m["ct"]=m["Cluster.id"].map(ctmap)
+          m=m[m.ct.notna()].copy()
+          cov222=m.groupby(["Patient","Diagnosis","Sex","ct"]).size().rename("n_nuclei").reset_index()
+          cov222.to_csv(OUT/"GSE222494_donor_celltype_coverage.csv",index=False)
+          header=pd.read_csv(pmat,nrows=0).columns.astype(str).tolist()
+          hcanon=header[1:] if header and header[0].startswith("Unnamed") else header
+          # pandas may name blank first column Unnamed: 0; matrix cells are rest
+          idx={c:i for i,c in enumerate(hcanon)}
+          if not set(m.canonical).issubset(idx):
+              miss=list(set(m.canonical)-set(idx))[:10]; raise RuntimeError(f"GSE222 cell IDs missing: {miss}")
+          targets={}; donor_meta={}
+          for ct in ["Astro","Micro","OPC","Oligo","Endothelial","Pericyte"]:
+              sub=m[m.ct.eq(ct)]
+              threshold=5 if ct=="Pericyte" else 10
+              counts=sub.groupby("Patient").size(); elig=counts[counts>=threshold].index
+              sub=sub[sub.Patient.isin(elig)]
+              donors=sorted(sub.Patient.unique().astype(str))
+              for d in donors:
+                  cellidx=[idx[x] for x in sub.loc[sub.Patient.astype(str).eq(d),"canonical"]]
+                  targets[("222",ct,d)]=cellidx
+              dm=sub.drop_duplicates("Patient").set_index("Patient")
+              donor_meta[("222",ct)]=pd.DataFrame(index=donors,
+                 data={"diagnosis":[int(dm.loc[d,"diagnosis"]) for d in donors],
+                       "sex":[dm.loc[d,"Sex"] for d in donors],
+                       "age":[float(dm.loc[d,"AAD"]) for d in donors]})
+          accum={k:[] for k in targets}; genes=[]
+          for chunk in pd.read_csv(pmat,index_col=0,chunksize=40):
+              genes.extend(chunk.index.astype(str).tolist())
+              arr=chunk.to_numpy(dtype=np.int64,copy=False)
+              for k,inds in targets.items():
+                  accum[k].append(arr[:,inds].sum(axis=1))
+          genes=pd.Index(genes,name="gene")
+          for ct in ["Astro","Micro","OPC","Oligo","Endothelial","Pericyte"]:
+              dm=donor_meta[("222",ct)]; donors=dm.index.tolist()
+              pb=pd.DataFrame({d:np.concatenate(accum[("222",ct,d)]) for d in donors},index=genes)
+              g0=dm.index[dm.diagnosis.eq(0)]; g1=dm.index[dm.diagnosis.eq(1)]
+              minrep=3
+              keep=((pb[g0]>=10).sum(axis=1)>=minrep)&((pb[g1]>=10).sum(axis=1)>=minrep)
+              pb=pb.loc[keep]
+              pb.to_csv(OUT/f"GSE222494_{ct}_pseudobulk.csv.gz",compression="gzip")
+              eff=ols_effect(pb,dm,age_col="age")
+              eff.to_csv(OUT/f"GSE222494_{ct}_effects.csv.gz",index=False,compression="gzip")
+
+          summary={}
+          for ds in ["GSE329625","GSE222494"]:
+              f=OUT/f"{ds}_donor_celltype_coverage.csv"; cv=pd.read_csv(f)
+              summary[ds]={"coverage_rows":len(cv),"total_nuclei":int(cv.n_nuclei.sum())}
+          for f in OUT.glob("*_effects.csv.gz"):
+              x=pd.read_csv(f); summary[f.name]={"n_genes":len(x),"effect_median":float(x.effect_log2cpm_ols.median()),"effect_sd":float(x.effect_log2cpm_ols.std())}
+          (OUT/"external_summary.json").write_text(json.dumps(summary,indent=2))
+          print(json.dumps(summary,indent=2))
+          PY
+          python /tmp/run.py | tee /tmp/external.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: external-cohort-pseudobulk
+          path: |
+            /tmp/external/
+            /tmp/external.log
+          retention-days: 7
