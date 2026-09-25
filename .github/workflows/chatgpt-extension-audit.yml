@@ -1,0 +1,118 @@
+name: ChatGPT extension metadata audit
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-extension-audit.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy openpyxl requests lxml
+      - name: Audit public metadata and repository listings
+        shell: bash
+        run: |
+          cat > /tmp/audit.py <<'PY'
+          from pathlib import Path
+          import json, re, io, gzip, requests, pandas as pd, numpy as np
+          from urllib.parse import urljoin
+          OUT=Path("/tmp/extension_audit"); OUT.mkdir(exist_ok=True)
+
+          def get(url, fn=None):
+              r=requests.get(url,timeout=180)
+              r.raise_for_status()
+              if fn:
+                  p=OUT/fn; p.write_bytes(r.content); return p
+              return r
+
+          report={}
+
+          # GSE174367 cell metadata
+          p=get("https://ftp.ncbi.nlm.nih.gov/geo/series/GSE174nnn/GSE174367/suppl/GSE174367_snRNA-seq_cell_meta.csv.gz","GSE174367_meta.csv.gz")
+          m=pd.read_csv(p)
+          report["GSE174367"]={"shape":list(m.shape),"columns":list(map(str,m.columns))}
+          small={}
+          for c in m.columns:
+              u=m[c].dropna().astype(str).unique()
+              txt=" ".join(u[:200]).lower()
+              if len(u)<=200 and any(k in txt for k in ["endo","peri","vascular","astro","micro","oligo","opc","ad","control"]):
+                  small[c]=m[c].astype(str).value_counts().head(100).to_dict()
+          report["GSE174367"]["interesting_value_counts"]=small
+          # save potential vascular rows
+          mask=np.zeros(len(m),dtype=bool)
+          for c in m.columns:
+              s=m[c].astype(str).str.lower()
+              mask |= s.str.contains("endo|peri|vascular|mural|smooth muscle|vlmc|fibro",regex=True,na=False).to_numpy()
+          m.loc[mask].to_csv(OUT/"GSE174367_vascular_rows.csv.gz",index=False,compression="gzip")
+          report["GSE174367"]["vascular_rows_any_text"]=int(mask.sum())
+
+          # GSE138852 author metadata
+          z=requests.get("https://zenodo.org/api/records/17302976",timeout=120); z.raise_for_status()
+          meta=z.json(); cand=[x for x in meta.get("files",[]) if x.get("key")=="adsn_metadata.txt"]
+          if cand:
+              p=get(cand[0]["links"]["self"],"adsn_metadata.txt")
+              a=pd.read_csv(p,sep="\t")
+              report["GSE138852"]={"shape":list(a.shape),"columns":list(map(str,a.columns))}
+              report["GSE138852"]["cellType_counts"]=a["cellType"].astype(str).value_counts().to_dict() if "cellType" in a else {}
+              for col in ["cellType","subclustCond","patient","batchCond"]:
+                  if col in a:
+                      report["GSE138852"][f"{col}_values"]=a[col].astype(str).value_counts().head(100).to_dict()
+              mask=np.zeros(len(a),dtype=bool)
+              for c in a.columns:
+                  s=a[c].astype(str).str.lower()
+                  mask |= s.str.contains("endo|peri|vascular|mural|smooth muscle|vlmc|fibro",regex=True,na=False).to_numpy()
+              a.loc[mask].to_csv(OUT/"GSE138852_vascular_rows.csv.gz",index=False,compression="gzip")
+              report["GSE138852"]["vascular_rows_any_text"]=int(mask.sum())
+
+          # GSE329625
+          p=get("https://ftp.ncbi.nlm.nih.gov/geo/series/GSE329nnn/GSE329625/suppl/GSE329625_full_metadata.csv.gz","GSE329625_full_metadata.csv.gz")
+          x=pd.read_csv(p)
+          report["GSE329625"]={"shape":list(x.shape),"columns":list(map(str,x.columns))}
+          for c in x.columns:
+              u=x[c].dropna().astype(str).unique(); txt=" ".join(u[:200]).lower()
+              if len(u)<=300 and any(k in txt for k in ["astro","micro","oligo","opc","endo","peri","vascular","pd","control","ilbd"]):
+                  report["GSE329625"][f"{c}_counts"]=x[c].astype(str).value_counts().head(120).to_dict()
+
+          # GSE222494
+          p=get("https://ftp.ncbi.nlm.nih.gov/geo/series/GSE222nnn/GSE222494/suppl/GSE222494_BrainFRONTAL_metadata.csv.gz","GSE222494_metadata.csv.gz")
+          y=pd.read_csv(p)
+          report["GSE222494"]={"shape":list(y.shape),"columns":list(map(str,y.columns))}
+          for c in y.columns:
+              u=y[c].dropna().astype(str).unique(); txt=" ".join(u[:200]).lower()
+              if len(u)<=300 and any(k in txt for k in ["astro","micro","oligo","opc","endo","peri","vascular","ad","control","sporadic","psen"]):
+                  report["GSE222494"][f"{c}_counts"]=y[c].astype(str).value_counts().head(120).to_dict()
+
+          # PRIDE directory listings
+          for px,yrmo in [("PXD040225","2025/10"),("PXD066087","2026/02")]:
+              url=f"https://ftp.pride.ebi.ac.uk/pride/data/archive/{yrmo}/{px}/"
+              r=requests.get(url,timeout=120); r.raise_for_status()
+              (OUT/f"{px}_listing.html").write_text(r.text)
+              names=sorted(set(re.findall(r'href=["\']([^"\']+)["\']',r.text)))
+              report[px]={"listing_url":url,"files":names}
+
+          (OUT/"extension_metadata_audit.json").write_text(json.dumps(report,indent=2,default=str))
+          print(json.dumps(report,indent=2,default=str))
+          PY
+          python /tmp/audit.py | tee /tmp/extension_audit.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: extension-metadata-audit
+          path: |
+            /tmp/extension_audit/
+            /tmp/extension_audit.log
+          retention-days: 7
