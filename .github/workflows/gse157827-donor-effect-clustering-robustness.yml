@@ -94,8 +94,7 @@ jobs:
                   raise RuntimeError("STEP26B final-count assertion not found")
               src=src.replace(
                   old,
-                  'print("SENSITIVITY_FINAL_COUNTS", final_counts.to_dict(), "ARCHIVAL_EXPECTED", EXPECTED_COUNTS)',
-                  1,
+                  'print("SENSITIVITY_FINAL_COUNTS", saved_final_cells["final_target_celltype"].value_counts().reindex(TARGET_ORDER, fill_value=0).to_dict(), "ARCHIVAL_EXPECTED", EXPECTED_COUNTS)',
               )
               return src
 
@@ -163,6 +162,7 @@ jobs:
         env:
           RETINA_ND_ROOT: /tmp/gse157827_default
         run: |
+          set -o pipefail
           rm -rf "$RETINA_ND_ROOT"
           mkdir -p "$RETINA_ND_ROOT/locks"
           python - <<'PY'
@@ -189,6 +189,7 @@ jobs:
         env:
           RETINA_ND_ROOT: /tmp/gse157827_exact
         run: |
+          set -o pipefail
           rm -rf "$RETINA_ND_ROOT"
           mkdir -p "$RETINA_ND_ROOT/locks"
           python - <<'PY'
