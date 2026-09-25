@@ -1,0 +1,294 @@
+name: Freeze pathway and multimodal publication source data
+
+on:
+  push:
+    branches: [reproducibility-audit]
+    paths:
+      - ".github/workflows/pathway-multimodal-source-data-freeze.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  freeze-pathway-multimodal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      RETINA_ND_ROOT: /tmp/retina_drive/MyDrive/RETINA_ND_V2
+      RETINA_ND_MYDRIVE: /tmp/retina_drive/MyDrive
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: reproducibility-audit
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install focused analysis environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            numpy==2.1.3 pandas==2.3.3 scipy==1.16.3 \
+            gseapy matplotlib requests openpyxl ipython
+
+      - name: Recover frozen AD and PD discovery effect tables
+        uses: actions/download-artifact@v5
+        with:
+          name: retina-nd-clean-room-audit
+          path: /tmp/original_audit
+          run-id: 36131301979
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare exact upstream inputs and resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RETINA_ND_ROOT"
+          mkdir -p "$ROOT/locks" "$ROOT/results/original_effects" "$ROOT/resources/pathways"
+          mkdir -p "$ROOT/ocular_validation/Wolf_Cell_2023"
+
+          AD="$(find /tmp/original_audit -type f -name 'GSE174367_AD_DISCOVERY_ALL_EFFECTS_LONG_v1.csv.gz' | head -1)"
+          PD="$(find /tmp/original_audit -type f -name 'GSE243639_PD_DISCOVERY_ALL_EFFECTS_LONG_v1.csv.gz' | head -1)"
+          test -n "$AD" && test -n "$PD"
+          cp "$AD" "$ROOT/results/original_effects/"
+          cp "$PD" "$ROOT/results/original_effects/"
+
+          cat > "$ROOT/locks/AD_REPLICATION_EVIDENCE_FINAL_FREEZE_v1.json" <<'JSON'
+          {"status":"AD_REPLICATION_EVIDENCE_FINAL_FROZEN","recovery_note":"Minimal gate lock for source-data regeneration; AD discovery effect table recovered from clean-room artifact 10864609217."}
+          JSON
+          cat > "$ROOT/locks/GSE243639_PD_DISCOVERY_EFFECT_FREEZE_v1.json" <<'JSON'
+          {"status":"PD_DISCOVERY_EFFECT_FROZEN","recovery_note":"Minimal gate lock for source-data regeneration; PD discovery effect table recovered from clean-room artifact 10864609217."}
+          JSON
+
+          curl -fL --retry 3 --connect-timeout 30 \
+            "https://download.reactome.org/97/ReactomePathways.gmt.zip" -o /tmp/reactome.zip
+          unzip -p /tmp/reactome.zip > "$ROOT/resources/pathways/ReactomePathways_V97.gmt"
+          echo "89983d5c1f0af11c52edfeee7323eb425580ac6281d387a528562ab1787ce56b  $ROOT/resources/pathways/ReactomePathways_V97.gmt" | sha256sum -c -
+
+          OUT="$ROOT/ocular_validation/Wolf_Cell_2023/NIHMS1931846-supplement-8.xlsx"
+          EXPECTED="edf47f225ab4b8e58ef79d2a910eeb5861f352c1e907ed84d9f71e3ec063c4f3"
+          rm -f "$OUT" /tmp/wolf_candidate.xlsx
+          for u in \
+            "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10720485/bin/NIHMS1931846-supplement-8.xlsx" \
+            "https://pmc.ncbi.nlm.nih.gov/articles/PMC10720485/bin/NIHMS1931846-supplement-8.xlsx" \
+            "https://pmc.ncbi.nlm.nih.gov/articles/instance/10720485/bin/NIHMS1931846-supplement-8.xlsx"
+          do
+            if curl -fL --retry 2 --connect-timeout 30 "$u" -o /tmp/wolf_candidate.xlsx; then
+              GOT="$(sha256sum /tmp/wolf_candidate.xlsx | awk '{print $1}')"
+              if [ "$GOT" = "$EXPECTED" ]; then cp /tmp/wolf_candidate.xlsx "$OUT"; break; fi
+            fi
+          done
+          if [ ! -s "$OUT" ]; then
+            for I in $(seq 1 12); do
+              CAND="/tmp/wolf_els_$I.xlsx"
+              URL="https://ars.els-cdn.com/content/image/1-s2.0-S0092867423010334-mmc$I.xlsx"
+              if curl -fL --retry 2 --connect-timeout 30 "$URL" -o "$CAND"; then
+                GOT="$(sha256sum "$CAND" | awk '{print $1}')"
+                if [ "$GOT" = "$EXPECTED" ]; then cp "$CAND" "$OUT"; break; fi
+              fi
+            done
+          fi
+          echo "$EXPECTED  $OUT" | sha256sum -c -
+
+      - name: Regenerate frozen pathway and multimodal source tables
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/run_publication_block.py <<'PY'
+          import json, os, re, sys, traceback
+          from pathlib import Path
+          from IPython.display import display
+
+          nb=json.loads(Path("RETINA_ND_bioRxiv_release.ipynb").read_text())
+          selected=[58,59,61,62,63,64,65,66,68,69,70,72,73,75,79,80,81,82]
+          g={"__name__":"__main__","display":display}
+
+          for idx in selected:
+              src="".join(nb["cells"][idx].get("source",[]))
+              src=src.replace("from google.colab import drive\n","")
+              src=re.sub(
+                  r'drive\.mount\(\s*"/content/drive",\s*force_remount=False,\s*\)',
+                  'print("HOSTED_RUNNER_DRIVE_MOUNT_SKIPPED")',
+                  src,
+              )
+              src=re.sub(
+                  r'MYDRIVE\s*=\s*Path\(\s*"/content/drive/MyDrive"\s*\)',
+                  'MYDRIVE = Path(__import__("os").environ["RETINA_ND_MYDRIVE"])',
+                  src,
+              )
+              print("\n"+"#"*100)
+              print("EXECUTING_RELEASE_NOTEBOOK_CELL",idx)
+              print("#"*100)
+              try:
+                  exec(compile(src,f"release_cell_{idx}","exec"),g,g)
+              except Exception:
+                  print("FAILED_RELEASE_NOTEBOOK_CELL",idx)
+                  traceback.print_exc()
+                  raise
+          print("PATHWAY_MULTIMODAL_RELEASE_BLOCK_COMPLETE")
+          PY
+          python /tmp/run_publication_block.py 2>&1 | tee /tmp/pathway_multimodal.log
+
+      - name: Verify frozen manuscript-facing results
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import math
+          from pathlib import Path
+          import pandas as pd
+
+          root=Path("/tmp/retina_drive/MyDrive/RETINA_ND_V2")
+          final=root/"results"/"final_evidence"
+          conv=root/"results"/"cross_disease_convergence"
+          figs=root/"results"/"publication_figures"
+
+          evidence=pd.read_csv(final/"RETINA_ND_CORE_MULTIMODAL_EVIDENCE_MATRIX_v3.csv.gz")
+          ranking=pd.read_csv(final/"RETINA_ND_UNIQUE_GENE_CANDIDATE_RANKING_v4.csv")
+          pconv=pd.read_csv(conv/"AD_PD_REACTOME_V97_PATHWAY_CONVERGENCE_v1.csv.gz")
+          reps=pd.read_csv(final/"RETINA_ND_REACTOME_NONREDUNDANT_REPRESENTATIVES_v6.csv")
+          profile=pd.read_csv(conv/"AD_PD_REACTOME_R3_PROFILE_PRESERVING_NULL_AUDIT_v1.csv")
+
+          assert len(evidence)==59481, len(evidence)
+          assert ranking.gene_symbol.nunique()==17745, ranking.gene_symbol.nunique()
+          top8=(ranking.sort_values("candidate_rank").head(8).gene_symbol.astype(str).str.upper().tolist())
+          expected_top8=["SCAMP5","XYLB","RABEPK","ITGAM","CD38","CTCF","UBTD2","NAPEPLD"]
+          assert top8==expected_top8,(top8,expected_top8)
+
+          t=pconv.copy()
+          t["_same"]=t["same_direction"].astype(bool)
+          t["_formal"]=t["convergent_pathway"].astype(bool)
+          s=t.groupby("pathway").agg(n_same=("_same","sum"),n_formal=("_formal","sum"))
+          r1=int((s.n_formal>=2).sum())
+          r2=int((s.n_formal==1).sum())
+          r3=int(((s.n_formal==0)&(s.n_same>=3)).sum())
+          assert len(s)==1551,len(s)
+          assert (r1,r2,r3)==(0,29,665),(r1,r2,r3)
+
+          pm=dict(zip(profile.metric.astype(str),pd.to_numeric(profile.value,errors="coerce")))
+          assert int(pm["observed_R3"])==665
+          assert math.isclose(float(pm["null_R3_mean"]),443.1,abs_tol=0.15),pm["null_R3_mean"]
+          assert math.isclose(float(pm["null_R3_2.5pct"]),411.0,abs_tol=1.0),pm["null_R3_2.5pct"]
+          assert math.isclose(float(pm["null_R3_97.5pct"]),476.0,abs_tol=1.0),pm["null_R3_97.5pct"]
+          assert math.isclose(float(pm["empirical_P"]),1/10001,abs_tol=1e-12),pm["empirical_P"]
+
+          class_counts=pd.read_csv(final/"RETINA_ND_CORE_EVIDENCE_CLASS_COUNTS_v3.csv")
+          a_rows=class_counts.loc[class_counts["core_evidence_class"].astype(str).eq("A")]
+          assert (a_rows.empty or pd.to_numeric(a_rows.iloc[:, -1],errors="coerce").fillna(0).sum()==0)
+
+          required=[
+              final/"RETINA_ND_REACTOME_UNIQUE_PATHWAY_RANKING_v5.csv",
+              final/"RETINA_ND_REACTOME_CELLTYPE_PATHWAY_DETAILS_v5.csv.gz",
+              final/"RETINA_ND_REACTOME_PUBLICATION_SHORTLIST_v5.csv",
+              final/"RETINA_ND_REACTOME_REDUNDANCY_MODULES_v5.csv",
+              final/"RETINA_ND_CANDIDATE_REACTOME_MAP_v5.csv",
+              final/"RETINA_ND_REACTOME_REDUNDANCY_MAP_v6.csv",
+              final/"RETINA_ND_REACTOME_FIGURE_PANEL_TOP30_v6.csv",
+              final/"RETINA_ND_REACTOME_FIGURE_MATRIX_v6.csv",
+              final/"RETINA_ND_REACTOME_FIGURE_LONG_v6.csv",
+              figs/"Figure3_REVISED_AD_PD_Reactome_convergence_data.csv",
+              figs/"Figure4_REVISED_multimodal_candidate_gene_support_data.csv",
+              figs/"Figure5_REVISED_candidate_pathway_matrix_data.csv",
+              figs/"Figure5_REVISED_candidate_pathway_edges.csv",
+              figs/"Figure5_REVISED_pathway_families.csv",
+          ]
+          missing=[str(p) for p in required if not p.exists()]
+          assert not missing,missing
+
+          print("PATHWAY_MULTIMODAL_SOURCE_DATA_VERIFIED")
+          print("evidence_rows",len(evidence))
+          print("unique_ranked_genes",ranking.gene_symbol.nunique())
+          print("top8",",".join(top8))
+          print("pathway_universe",len(s),"R1",r1,"R2",r2,"R3",r3)
+          print("profile_null_mean",pm["null_R3_mean"],"CI",pm["null_R3_2.5pct"],pm["null_R3_97.5pct"],"P",pm["empirical_P"])
+          print("nonredundant_representatives",len(reps))
+          PY
+
+      - name: Preserve publication source-data block
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RETINA_ND_ROOT"
+          DEST="publication/source_data/pathway_multimodal"
+          rm -rf "$DEST"
+          mkdir -p "$DEST/final_evidence" "$DEST/cross_disease" "$DEST/figure_source_data" "$DEST/ocular_inputs"
+
+          cp "$ROOT/results/cross_disease_convergence/AD_PD_ALL_GENE_CONVERGENCE_v2.csv.gz" "$DEST/cross_disease/"
+          cp "$ROOT/results/cross_disease_convergence/AD_PD_CONVERGENCE_SUMMARY_v2.csv" "$DEST/cross_disease/"
+          cp "$ROOT/results/cross_disease_convergence/AD_PD_REACTOME_V97_PRERANK_ALL_v1.csv.gz" "$DEST/cross_disease/"
+          cp "$ROOT/results/cross_disease_convergence/AD_PD_REACTOME_V97_PATHWAY_CONVERGENCE_v1.csv.gz" "$DEST/cross_disease/"
+          cp "$ROOT/results/cross_disease_convergence/AD_PD_REACTOME_V97_PATHWAY_SUMMARY_v1.csv" "$DEST/cross_disease/"
+          cp "$ROOT/results/cross_disease_convergence/AD_PD_REACTOME_R3_RECURRENCE_NULL_AUDIT_v1.csv" "$DEST/cross_disease/"
+          cp "$ROOT/results/cross_disease_convergence/AD_PD_REACTOME_R3_RECURRENCE_NULL_DISTRIBUTION_v1.csv.gz" "$DEST/cross_disease/"
+          cp "$ROOT/results/cross_disease_convergence/AD_PD_REACTOME_R3_PROFILE_PRESERVING_NULL_AUDIT_v1.csv" "$DEST/cross_disease/"
+          cp "$ROOT/results/cross_disease_convergence/AD_PD_REACTOME_R3_PROFILE_PRESERVING_NULL_DISTRIBUTION_v1.csv.gz" "$DEST/cross_disease/"
+
+          find "$ROOT/results/final_evidence" -maxdepth 1 -type f \
+            \( -name 'RETINA_ND_CORE_*' -o -name 'RETINA_ND_UNIQUE_GENE_*' -o -name 'RETINA_ND_CLASS_B_*' -o -name 'RETINA_ND_TOP100_*' -o -name 'RETINA_ND_PRIORITY_GROUP_*' -o -name 'RETINA_ND_REACTOME_*' -o -name 'RETINA_ND_CANDIDATE_REACTOME_*' -o -name 'RETINA-ND_*' \) \
+            -exec cp {} "$DEST/final_evidence/" \;
+
+          find "$ROOT/results/publication_figures" -maxdepth 1 -type f -name '*.csv' -exec cp {} "$DEST/figure_source_data/" \;
+
+          cp "$ROOT/retina_reference/GSE148077/GSE148077_BRAIN_CONVERGENCE_RETINAL_EXPRESSION_SUMMARY_v1.csv.gz" "$DEST/ocular_inputs/"
+          cp "$ROOT/ocular_validation/PXD073336/analysis/PXD073336_AD_RETINA_INTERNAL_GENE_EFFECTS_v1.csv.gz" "$DEST/ocular_inputs/"
+          cp "$ROOT/ocular_validation/Wolf_Cell_2023/analysis/Wolf_PD_AQUEOUS_HUMOR_WELCH_GENE_EFFECTS_v3.csv.gz" "$DEST/ocular_inputs/"
+
+          cp /tmp/pathway_multimodal.log "$DEST/execution.log"
+
+      - name: Write provenance and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, importlib.metadata as md
+
+          dest=Path("publication/source_data/pathway_multimodal")
+          provenance={
+              "release_notebook":"RETINA_ND_bioRxiv_release.ipynb",
+              "executed_release_cell_indices":[58,59,61,62,63,64,65,66,68,69,70,72,73,75,79,80,81,82],
+              "original_effect_artifact":{
+                  "run_id":36131301979,
+                  "artifact_id":10864609217,
+                  "artifact_digest":"sha256:d9e3092ee1d364576c6711443578bd2dec465213be2661f12e9ed539d51b27c7"
+              },
+              "reactome_v97_sha256":"89983d5c1f0af11c52edfeee7323eb425580ac6281d387a528562ab1787ce56b",
+              "wolf_workbook_sha256":"edf47f225ab4b8e58ef79d2a910eeb5861f352c1e907ed84d9f71e3ec063c4f3",
+              "versions":{p:md.version(p) for p in ["numpy","pandas","scipy","gseapy","matplotlib","requests","openpyxl"]},
+              "interpretation":[
+                  "Reactome V97 pathway universe and original multimodal ranking regenerated from the public release notebook.",
+                  "R2/R3 and profile-preserving null values were checked against the frozen manuscript-facing results before commit.",
+                  "Ocular layers are independent support/prioritization layers and are not biomarker validation."
+              ]
+          }
+          (dest/"PROVENANCE.json").write_text(json.dumps(provenance,indent=2)+"\n")
+          (dest/"README.md").write_text("\n".join([
+              "# Pathway and multimodal publication source data",
+              "",
+              "This directory preserves the regenerated source tables underlying the original Reactome and multimodal candidate analyses and the source-data CSVs for publication Figures 3-5.",
+              "",
+              "The block was regenerated from the public release notebook using the frozen AD/PD discovery effect tables recovered from clean-room artifact 10864609217, the exact Reactome V97 GMT resource, the exact Wolf workbook, and the public PXD073336/GSE148077 inputs.",
+              "",
+              "Verification requires 59,481 cell-type/gene evidence rows, 17,745 ranked unique genes, top-eight genes SCAMP5/XYLB/RABEPK/ITGAM/CD38/CTCF/UBTD2/NAPEPLD, a 1,551-pathway universe, R1=0, R2=29, R3=665, and the profile-preserving null result matching the frozen manuscript values.",
+              "",
+          ]))
+
+          root=Path("publication/source_data")
+          files=sorted(p for p in root.rglob("*") if p.is_file() and p.name!="SHA256SUMS.txt")
+          (root/"SHA256SUMS.txt").write_text("\n".join(
+              f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(root).as_posix()}" for p in files
+          )+"\n")
+          PY
+
+      - name: Commit verified pathway and multimodal source data
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "publication-data-freeze"
+          git config user.email "actions@users.noreply.github.com"
+          git add publication/source_data
+          git commit -m "Freeze pathway and multimodal publication source data"
+          git push origin HEAD:reproducibility-audit
