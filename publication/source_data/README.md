@@ -1,1 +1,18 @@
-# Publication source data\n\nThese files are durable copies of the exact outputs used for the publication-facing cross-cohort glial matrix and independent-pair donor-bootstrap robustness analysis.\n\n## Provenance\n\n- 2 x 2 AD-PD glial matrix: workflow run 36142383845, artifact 10868790506, artifact digest sha256:b8f249d4b2ce8fd306d053cb1bb2cbbe469bf817721b5e109093f23a9fc109a7.\n- Independent GSE222494 x GSE329625 donor bootstrap: workflow run 36135599890, artifact 10863442549, artifact digest sha256:d848e3e0390742999cf74f67c79608658c708f90a2c6f8a6d3cae980eb8ddf77.\n\nThe 16-row matrix and four bootstrap summaries were verified numerically against PUBLICATION_RESULT_FREEZE_v1.md before commit. No frozen publication value mismatched.\n\nThe independent-pair pair-summary permutation P values come from its own permutation realization and are not substituted for the corresponding values in the separately executed 2 x 2 matrix table. Bootstrap confidence intervals use B=500 donor-resampling iterations per cell class.\n\nThe compressed gene-effect tables and all 500 bootstrap draws per cell class are retained here so publication figures and source-data tables no longer depend on expiring workflow artifacts.\n
+# Publication source data
+
+Status: final source-data completeness audit passed on branch `reproducibility-audit`.
+
+All 20 planned publication-workbook sheets now map to durable repository source data. The authoritative mapping is `SOURCE_DATA_COMPLETENESS_AUDIT_v1.csv`; unified run/artifact provenance is in `analysis_provenance.csv`; cohort roles are in `dataset_manifest.csv`.
+
+Durable blocks include:
+- original PD replication and frozen AD primary/secondary replication summaries;
+- GSE157827 default-vs-exact clustering/effect sensitivity;
+- original AD-PD pair, full 2 x 2 cross-cohort matrix, and independent-pair donor bootstrap;
+- Reactome pathway and multimodal candidate source data;
+- healthy-retina expression gate, PXD073336 AD-retina proteomics, and PD aqueous-humor support;
+- exploratory vascular analyses and GSE157827 author-Endo sensitivity;
+- independent PXD040225 human AD-retina sensitivity.
+
+Known limitations remain explicit: the original executed GSE157827 28-cluster cell partition is unavailable; the regenerated candidate-pathway map contains 69,296 rows versus the archival assertion of 69,297 although downstream Figure-5 checks passed; PXD066087 is excluded from quantitative human validation; vascular analyses remain exploratory.
+
+`SHA256SUMS.txt` covers the durable source-data tree. Main branch and Zenodo remain unchanged.
