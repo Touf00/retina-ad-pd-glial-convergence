@@ -1,0 +1,285 @@
+name: ChatGPT vascular convergence extension
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-vascular-convergence.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install pandas numpy scipy h5py openpyxl requests
+      - name: Download audit artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/art_split /tmp/art_external /tmp/art_pd
+          for spec in "10843829988:/tmp/art_split" "10843939879:/tmp/art_external" "10864260115:/tmp/art_pd"; do
+            ID="${spec%%:*}"; DEST="${spec#*:}"
+            curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$ID/zip" -o "/tmp/a$ID.zip"
+            unzip -q "/tmp/a$ID.zip" -d "$DEST"
+          done
+          df -h
+          find /tmp/art_split -type f | sed -n '1,80p'
+          find /tmp/art_external -type f | sed -n '1,80p'
+          find /tmp/art_pd -type f | sed -n '1,80p'
+      - name: Build vascular pseudobulk and convergence
+        shell: bash
+        run: |
+          cat > /tmp/vascular_conv.py <<'PY'
+          from pathlib import Path
+          import re, json, requests
+          import numpy as np, pandas as pd, h5py
+          from scipy.sparse import csc_matrix
+          from scipy.stats import spearmanr
+          OUT=Path("/tmp/vascular_convergence"); OUT.mkdir(exist_ok=True)
+          rng=np.random.default_rng(20260925)
+
+          def one(root,name):
+              hits=list(Path(root).rglob(name))
+              if len(hits)!=1: raise RuntimeError((root,name,[str(x) for x in hits]))
+              return hits[0]
+
+          def filter_pb(pb, diag, min_count=10, min_donors=3):
+              c=[d for d in pb.columns if diag[d]==0]; p=[d for d in pb.columns if diag[d]==1]
+              if len(c)<min_donors or len(p)<min_donors:
+                  raise RuntimeError(("insufficient donors",len(c),len(p)))
+              keep=((pb[c]>=min_count).sum(axis=1)>=min_donors)&((pb[p]>=min_count).sum(axis=1)>=min_donors)
+              return pb.loc[keep],c,p
+
+          def logcpm_effect(pb,diag):
+              libs=pb.sum(axis=0).astype(float)
+              L=np.log2(pb.div(libs,axis=1)*1e6+0.5)
+              c=[d for d in pb.columns if diag[d]==0]; p=[d for d in pb.columns if diag[d]==1]
+              return L[p].mean(axis=1)-L[c].mean(axis=1)
+
+          def save_effect(ds,ct,pb,diag):
+              pb,c,p=filter_pb(pb,diag)
+              eff=logcpm_effect(pb,diag)
+              pb.to_csv(OUT/f"{ds}_{ct}_pseudobulk.csv.gz",compression="gzip")
+              pd.DataFrame({"gene":eff.index,"effect":eff.values}).to_csv(OUT/f"{ds}_{ct}_effects.csv.gz",index=False,compression="gzip")
+              pd.DataFrame({"donor":pb.columns,"diagnosis":[diag[d] for d in pb.columns]}).to_csv(OUT/f"{ds}_{ct}_donors.csv",index=False)
+              return eff,pb,diag,{"n_genes":len(pb),"n_case":len(p),"n_control":len(c)}
+
+          # ---------- GSE174367 AD: diagnosis-blind vascular split ----------
+          root="/tmp/art_split"
+          h5=one(root,"GSE174367.h5")
+          ass=pd.read_csv(one(root,"GSE174367_PER_END_cell_assignments.csv.gz"))
+          ass["assigned"]=ass["assigned"].astype(str)
+          ad_effects={}; ad_pbs={}; ad_diags={}; coverage={}
+          with h5py.File(h5,"r") as h:
+              g=h["matrix"]; bar=[x.decode() if isinstance(x,bytes) else str(x) for x in g["barcodes"][:]]
+              feat=g["features"]; key="name" if "name" in feat else "id"
+              genes=[x.decode() if isinstance(x,bytes) else str(x) for x in feat[key][:]]
+              mat=csc_matrix((g["data"][:],g["indices"][:],g["indptr"][:]),shape=tuple(g["shape"][:]))
+          b2i={b:i for i,b in enumerate(bar)}
+          for label,ct in [("Endothelial","Endothelial"),("Pericyte_Mural","Pericyte")]:
+              sub=ass[ass.assigned.eq(label)].copy()
+              counts=sub.groupby("SampleID").size()
+              elig=counts[counts>=5].index.astype(str).tolist()
+              sub=sub[sub.SampleID.astype(str).isin(elig)]
+              dx=(sub.drop_duplicates("SampleID").set_index("SampleID")["Diagnosis"].astype(str))
+              diag={str(d):(1 if str(dx.loc[d]).upper().startswith("AD") else 0) for d in elig}
+              if sum(v==1 for v in diag.values())<3 or sum(v==0 for v in diag.values())<3:
+                  raise RuntimeError(("GSE174",ct,diag))
+              cols={}
+              for d in elig:
+                  inds=[b2i[b] for b in sub.loc[sub.SampleID.astype(str).eq(d),"Barcode"].astype(str)]
+                  cols[d]=np.asarray(mat[:,inds].sum(axis=1)).ravel()
+              pb=pd.DataFrame(cols,index=pd.Index(genes,name="gene")).groupby(level=0,sort=False).sum()
+              eff,pbf,dg,info=save_effect("GSE174367",ct,pb,diag)
+              ad_effects[("174",ct)]=eff; ad_pbs[("174",ct)]=pbf; ad_diags[("174",ct)]=dg; coverage[("174",ct)]=info
+
+          # ---------- GSE243639 PD: author VC resolved as endothelial ----------
+          ass243=pd.read_csv(one(root,"GSE243639_VC_cell_assignments.csv.gz"))
+          ass243=ass243[ass243.assigned.eq("Endothelial")].copy()
+          # authoritative Martirosyan Supplementary Table 1
+          url=("https://media.springernature.com/original/"
+               "springer-static/esm/art%3A10.1186%2Fs13024-023-00699-0/"
+               "MediaObjects/13024_2023_699_MOESM1_ESM.xlsx")
+          rr=requests.get(url,headers={"User-Agent":"Mozilla/5.0"},timeout=120); rr.raise_for_status()
+          xls=OUT/"Martirosyan_Supp1.xlsx"; xls.write_bytes(rr.content)
+          raw=pd.read_excel(xls,header=None)
+          header=None
+          for i in range(min(30,len(raw))):
+              vals=raw.iloc[i].astype(str).str.strip().tolist()
+              if "Sample ID" in vals and "Clinical diagnosis" in vals:
+                  header=i; break
+          if header is None: raise RuntimeError("Martirosyan header not found")
+          clinical=pd.read_excel(xls,header=header)
+          clinical.columns=[str(x).strip() for x in clinical.columns]
+          donor=clinical[["Sample ID","Clinical diagnosis"]].copy()
+          donor["Sample ID"]=donor["Sample ID"].astype(str).str.strip().str.replace(".","_",regex=False)
+          donor["diag"]=donor["Clinical diagnosis"].astype(str).str.strip().map({"Parkinson's":1,"Control":0})
+          donor=donor[donor.diag.notna()].drop_duplicates("Sample ID").set_index("Sample ID")
+          counts=ass243.groupby("donor_id").size()
+          elig=counts[counts>=20].index.astype(str).tolist()
+          missing=[d for d in elig if d not in donor.index]
+          if missing: raise RuntimeError(("GSE243 donor mapping",missing,donor.index.tolist()))
+          diag243={d:int(donor.loc[d,"diag"]) for d in elig}
+          pc=one(root,"GSE243639_Filtered_count_table.csv.gz")
+          header_cols=pd.read_csv(pc,nrows=0).columns.astype(str).tolist()
+          rawcols=header_cols[1:]; canon=[re.sub(r"\.(\d+)$",r"-\1",x) for x in rawcols]; c2raw=dict(zip(canon,rawcols))
+          selected=ass243[ass243.donor_id.astype(str).isin(elig)].copy()
+          if not set(selected.CELL_ID).issubset(c2raw): raise RuntimeError("GSE243 selected cells missing")
+          donor_raw={d:[c2raw[x] for x in selected.loc[selected.donor_id.astype(str).eq(d),"CELL_ID"].astype(str)] for d in elig}
+          acc={d:[] for d in elig}; genes243=[]
+          use=[header_cols[0]]+sorted(set(sum(donor_raw.values(),[])))
+          for chunk in pd.read_csv(pc,usecols=use,index_col=0,chunksize=80):
+              genes243.extend(chunk.index.astype(str).tolist())
+              for d,cols in donor_raw.items():
+                  acc[d].append(chunk[cols].to_numpy(dtype=np.int64,copy=False).sum(axis=1))
+          pb243=pd.DataFrame({d:np.concatenate(acc[d]) for d in elig},index=pd.Index(genes243,name="gene")).groupby(level=0,sort=False).sum()
+          eff243,pb243f,dg243,info=save_effect("GSE243639","Endothelial",pb243,diag243)
+          coverage[("243","Endothelial")]=info
+
+          # ---------- GSE157783 PD replication: explicit endothelial/pericyte ----------
+          rp="/tmp/art_pd"
+          cell=pd.read_csv(one(rp,"IPDCO_hg_midbrain_cell.tsv"),sep="\t")
+          def canon_patient(v):
+              clean=re.sub(r"[^A-Za-z0-9]+","",str(v)).upper()
+              m=re.fullmatch(r"C(?:ONTROL)?(\d+)",clean)
+              if m:return f"C{int(m.group(1))}"
+              m=re.search(r"(\d+)$",clean)
+              if m:return f"IPD{int(m.group(1))}"
+              raise ValueError(v)
+          cell["donor"]=cell.patient.map(canon_patient)
+          cell["diagnosis"]=np.where(cell.donor.str.startswith("IPD"),1,0)
+          def ctype(x):
+              x=str(x).lower()
+              if "endothel" in x:return "Endothelial"
+              if "pericy" in x:return "Pericyte"
+              return None
+          cell["ct"]=cell.cell_ontology.map(ctype)
+          vc=cell[cell.ct.notna()].copy()
+          genes_tbl=pd.read_csv(one(rp,"IPDCO_hg_midbrain_genes.tsv"),sep="\t",header=None,dtype=str)
+          first=" | ".join(genes_tbl.iloc[0].fillna("").astype(str).tolist()).lower()
+          if first.strip()=="row" or first.startswith("row |") or any(k in first for k in ["gene_id","gene_name","symbol"]):
+              genes_tbl=genes_tbl.iloc[1:].reset_index(drop=True)
+          gene_names=(genes_tbl.iloc[:,1] if genes_tbl.shape[1]>=2 else genes_tbl.iloc[:,0]).astype(str).tolist()
+          umi=one(rp,"IPDCO_hg_midbrain_UMI.tsv")
+          with open(umi,"rt",encoding="utf-8",buffering=1024*1024) as f:
+              hdr=f.readline().rstrip("\r\n").split("\t")
+          b2i157={b:i for i,b in enumerate(hdr)}
+          pd157_effects={}; pd157_pbs={}; pd157_diags={}
+          for ct in ["Endothelial","Pericyte"]:
+              ss=vc[vc.ct.eq(ct)].copy(); counts=ss.groupby("donor").size(); elig157=counts[counts>=20].index.astype(str).tolist()
+              diag157={d:int(ss.loc[ss.donor.eq(d),"diagnosis"].iloc[0]) for d in elig157}
+              groups={d:np.asarray([b2i157[b] for b in ss.loc[ss.donor.eq(d),"barcode"].astype(str)],dtype=int) for d in elig157}
+              acc157={d:[] for d in elig157}; gi=-1
+              with open(umi,"rt",encoding="utf-8",buffering=1024*1024) as f:
+                  f.readline()
+                  for gi,line in enumerate(f):
+                      vals=np.fromstring(line.rstrip("\r\n"),sep="\t",dtype=np.int64)
+                      for d,inds in groups.items(): acc157[d].append(np.array([vals[inds].sum()],dtype=np.int64))
+              nrows=gi+1
+              if nrows!=len(gene_names): raise RuntimeError(("GSE157 rows",nrows,len(gene_names)))
+              pb157=pd.DataFrame({d:np.concatenate(acc157[d]) for d in elig157},index=pd.Index(gene_names,name="gene")).groupby(level=0,sort=False).sum()
+              e,pbf,dg,inf=save_effect("GSE157783",ct,pb157,diag157)
+              pd157_effects[ct]=e; pd157_pbs[ct]=pbf; pd157_diags[ct]=dg; coverage[("157",ct)]=inf
+
+          # ---------- GSE222494 AD external: reuse frozen pseudobulk ----------
+          er="/tmp/art_external"
+          meta222=pd.read_csv(one(er,"GSE222494_metadata.csv.gz"),low_memory=False)
+          meta222=meta222[meta222.Diagnosis.isin(["Control","Sporadic"])].copy()
+          dmeta=meta222.drop_duplicates("Patient").set_index("Patient")
+          ad222_effects={}; ad222_pbs={}; ad222_diags={}
+          for ct in ["Endothelial","Pericyte"]:
+              pb=pd.read_csv(one(er,f"GSE222494_{ct}_pseudobulk.csv.gz"),index_col=0)
+              dg={str(d):(1 if str(dmeta.loc[d,"Diagnosis"])=="Sporadic" else 0) for d in pb.columns}
+              # already gene-filtered upstream; recompute common mean-logCPM effect for comparability
+              e=logcpm_effect(pb,dg)
+              ad222_effects[ct]=e; ad222_pbs[ct]=pb; ad222_diags[ct]=dg
+              pd.DataFrame({"gene":e.index,"effect":e.values}).to_csv(OUT/f"GSE222494_{ct}_effects_common.csv.gz",index=False,compression="gzip")
+              coverage[("222",ct)]={"n_genes":len(pb),"n_case":sum(v==1 for v in dg.values()),"n_control":sum(v==0 for v in dg.values())}
+
+          # ---------- comparisons ----------
+          effects={
+            ("AD174","Endothelial"):ad_effects[("174","Endothelial")],
+            ("AD174","Pericyte"):ad_effects[("174","Pericyte")],
+            ("AD222","Endothelial"):ad222_effects["Endothelial"],
+            ("AD222","Pericyte"):ad222_effects["Pericyte"],
+            ("PD243","Endothelial"):eff243,
+            ("PD157","Endothelial"):pd157_effects["Endothelial"],
+            ("PD157","Pericyte"):pd157_effects["Pericyte"],
+          }
+          comp=[
+            ("AD_replication_Endothelial","AD174","AD222","Endothelial"),
+            ("AD_replication_Pericyte","AD174","AD222","Pericyte"),
+            ("PD_replication_Endothelial","PD243","PD157","Endothelial"),
+            ("Cross_Endo_AD174_PD243","AD174","PD243","Endothelial"),
+            ("Cross_Endo_AD174_PD157","AD174","PD157","Endothelial"),
+            ("Cross_Endo_AD222_PD243","AD222","PD243","Endothelial"),
+            ("Cross_Endo_AD222_PD157","AD222","PD157","Endothelial"),
+            ("Cross_Pericyte_AD174_PD157","AD174","PD157","Pericyte"),
+            ("Cross_Pericyte_AD222_PD157","AD222","PD157","Pericyte"),
+          ]
+          rows=[]
+          for name,a,b,ct in comp:
+              x=effects[(a,ct)].rename("A"); y=effects[(b,ct)].rename("B")
+              m=pd.concat([x,y],axis=1,join="inner").dropna()
+              rho,p=spearmanr(m.A,m.B); agree=float((np.sign(m.A)==np.sign(m.B)).mean())
+              null=np.empty(5000); arr=m.B.to_numpy(); aa=m.A.to_numpy()
+              for i in range(len(null)): null[i]=spearmanr(aa,rng.permutation(arr)).statistic
+              emp=(1+np.sum(np.abs(null)>=abs(rho)))/(len(null)+1)
+              rows.append({"comparison":name,"cell_class":ct,"n_genes":len(m),"rho":float(rho),"p":float(p),
+                           "sign_agreement":agree,"perm_p":float(emp)})
+              m.to_csv(OUT/f"{name}_merged.csv.gz",compression="gzip")
+          summary=pd.DataFrame(rows); summary.to_csv(OUT/"vascular_comparison_summary.csv",index=False)
+
+          # donor bootstrap for 4 endothelial cross-disease combinations using common mean-logCPM estimator
+          pbmap={
+            "AD174":(ad_pbs[("174","Endothelial")],ad_diags[("174","Endothelial")]),
+            "AD222":(ad222_pbs["Endothelial"],ad222_diags["Endothelial"]),
+            "PD243":(pb243f,dg243),
+            "PD157":(pd157_pbs["Endothelial"],pd157_diags["Endothelial"])
+          }
+          def boot_effect(pb,dg):
+              c=[d for d in pb.columns if dg[d]==0]; p=[d for d in pb.columns if dg[d]==1]
+              sc=list(rng.choice(c,len(c),replace=True)); sp=list(rng.choice(p,len(p),replace=True))
+              x=pb[sc+sp].copy(); x.columns=[f"c{i}" for i in range(len(sc))]+[f"p{i}" for i in range(len(sp))]
+              libs=x.sum(axis=0).astype(float); L=np.log2(x.div(libs,axis=1)*1e6+0.5)
+              return L.iloc[:,len(sc):].mean(axis=1)-L.iloc[:,:len(sc)].mean(axis=1)
+          boots=[]
+          for name,a,b,ct in [x for x in comp if x[0].startswith("Cross_Endo")]:
+              vals=[]
+              pba,dga=pbmap[a]; pbb,dgb=pbmap[b]
+              for i in range(300):
+                  ea=boot_effect(pba,dga); eb=boot_effect(pbb,dgb)
+                  mm=pd.concat([ea.rename("A"),eb.rename("B")],axis=1,join="inner").dropna()
+                  vals.append(float(spearmanr(mm.A,mm.B).statistic))
+              v=np.asarray(vals)
+              boots.append({"comparison":name,"B":300,"median_rho":float(np.nanmedian(v)),
+                            "ci2_5":float(np.nanpercentile(v,2.5)),"ci97_5":float(np.nanpercentile(v,97.5)),
+                            "fraction_gt0":float(np.mean(v>0))})
+          pd.DataFrame(boots).to_csv(OUT/"vascular_endothelial_bootstrap_summary.csv",index=False)
+          final={"coverage":{f"{k[0]}_{k[1]}":v for k,v in coverage.items()},
+                 "comparisons":rows,"bootstrap":boots,
+                 "pericyte_PD_replication_available":False}
+          (OUT/"summary.json").write_text(json.dumps(final,indent=2))
+          print(json.dumps(final,indent=2))
+          PY
+          python /tmp/vascular_conv.py | tee /tmp/vascular_convergence.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vascular-convergence-extension
+          path: |
+            /tmp/vascular_convergence/
+            /tmp/vascular_convergence.log
+          retention-days: 7
