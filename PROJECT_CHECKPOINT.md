@@ -13,9 +13,10 @@ Checkpoint commit inspected: `4a98ef9`
   - `36142316148` — corrected vascular convergence extension; completed successfully.
   - `36136473933` — PXD040225 DEP extraction; completed successfully.
   - `36087596027` — external-cohort pseudobulk; completed successfully.
-- Relevant unresolved failed runs:
+- Latest resolved feasibility milestone:
+  - `36145217468` — GSE157827 endothelial feasibility audit completed successfully using the official PMC Open Access object; artifact `10869243247`, expires 2026-10-02 14:06:13 UTC.
+- Relevant unresolved failed run:
   - `36131301979` — clean-room audit failed during notebook execution at the GSE157827 31-vs-28 clustering assertion; audit artifact was still uploaded.
-  - `36135706446` — GSE157827 endothelial feasibility audit failed before producing an artifact. PNAS supplement URLs returned HTTP 403 or HTML, and the Europe PMC supplementary bundle request timed out. This is a source-retrieval failure, not a biological exclusion.
 
 ## Purpose
 
@@ -139,6 +140,15 @@ Interpretation:
 - Upstream corrected PD-vascular pseudobulk run: 36140417739.
 - Upstream artifact: 10865839087; expires 2026-10-02 13:22:10 UTC.
 
+### GSE157827 endothelial feasibility
+- Official author supplement recovered deterministically from PMC Open Access and verified by SHA-256 `a7cf9493b99e5cb904e8dcc764349a331fda701509ebbe5a9e1ad868b18bc344`.
+- AD: 12 donors, estimated 1,729.8 author-labelled Endo nuclei total; all 12 donors >=20, 10/12 >=50; median 96, range 23-645.
+- NC: 9 donors, estimated 714 Endo nuclei total; all 9 donors >=50; median 70, range 51-159.
+- This establishes donor-level endothelial coverage feasibility, not an AD effect result.
+- The author QC table does not separate pericytes, so this cohort cannot support an author-labelled pericyte arm without a defensible independent reannotation.
+- Successful run: `36145217468`.
+- Artifact: `10869243247`; expires 2026-10-02 14:06:13 UTC.
+
 ### GSE243639 vascular identity
 - Author `VC` population was audited diagnosis-blind.
 - It behaves as endothelial-like rather than a clear endothelial/pericyte mixture.
@@ -174,11 +184,11 @@ Blocking issue:
    - Reproduce archival 28-cluster solution if possible.
    - Then continue full clean-room notebook to the end.
 
-2. Complete GSE157827 vascular decision.
-   - First make supplement retrieval deterministic (vendor/Europe PMC URLs currently fail or time out in Actions), or recover the same author QC table from a verified alternate public source.
-   - Establish whether author Endo cells are sufficiently represented for donor-level AD endothelial analysis.
-   - Pericytes are not clearly author-annotated in the available GSE157827 QC.
-   - If robust extraction is not possible, explicitly exclude this cohort from the vascular extension.
+2. Complete GSE157827 endothelial disease-effect analysis or explicitly defer it.
+   - Supplement retrieval and donor coverage feasibility are now resolved.
+   - Endothelial coverage is adequate for a donor-level AD-vs-NC analysis, but coverage counts alone are not an effect estimate.
+   - Generate a donor-level endothelial pseudobulk/effect vector under a frozen, diagnosis-blind mapping, then compare it with GSE174367 and GSE222494; if the unresolved 31-vs-28 drift prevents a defensible mapping, record that limitation and defer the effect analysis.
+   - Pericytes are not author-separated and should not be forced from this cohort.
 
 3. PXD066087 mouse PD retina.
    - PRIDE currently exposes raw TMT MS files, no obvious processed protein-level table.
