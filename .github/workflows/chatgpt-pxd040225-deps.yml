@@ -32,11 +32,19 @@ jobs:
           reader=pypdf.PdfReader(str(p))
           pages=[(x.extract_text() or "") for x in reader.pages]
           starts={}
+          occurrences={n:[] for n in range(4,12)}
           for i,t in enumerate(pages):
               for n in range(4,12):
-                  if f"Supplementary Table {n}." in t and n not in starts:
-                      starts[n]=i
-          print("table starts", {k:v+1 for k,v in starts.items()})
+                  if f"Supplementary Table {n}." in t:
+                      occurrences[n].append(i)
+          # Page 1 is the supplement contents. Use the last occurrence,
+          # which is the actual table heading rather than the contents entry.
+          for n,idxs in occurrences.items():
+              if idxs: starts[n]=idxs[-1]
+          print("table occurrences", {k:[i+1 for i in v] for k,v in occurrences.items()})
+          print("actual table starts", {k:v+1 for k,v in starts.items()})
+          if 4 not in starts or 5 not in starts:
+              raise RuntimeError("Could not locate actual Supplementary Tables 4 and 5")
 
           accession=re.compile(r"(?<![A-Za-z0-9])([A-NR-Z][0-9][A-Z0-9]{3}[0-9](?:-[0-9]+)?|[OPQ][0-9][A-Z0-9]{3}[0-9](?:-[0-9]+)?)(?=\s)")
           def parse_section(n,direction):
@@ -67,13 +75,19 @@ jobs:
           up=parse_section(4,"up")
           down=parse_section(5,"down")
           dep=pd.concat([up,down],ignore_index=True)
-          dep["log2FC_signed"]=np.where(dep.direction.eq("up"),np.log2(dep.FC_AD_over_NC),-np.log2(dep.FC_AD_over_NC))
+          # FC is AD/NC in the source table, so log2(FC) is already signed.
+          dep["log2FC_signed"]=np.log2(dep.FC_AD_over_NC)
           dep.to_csv(out/"PXD040225_retina_DEPs_extracted.csv",index=False)
           candidates=["SCAMP5","XYLB","RABEPK","ITGAM","CD38","CTCF","UBTD2","NAPEPLD"]
           cand=pd.DataFrame({"gene":candidates}).merge(dep,on="gene",how="left")
           cand.to_csv(out/"PXD040225_manuscript_candidate_overlap.csv",index=False)
+          # Basic source-direction QC. A few borderline rows are allowed,
+          # but the two tables should overwhelmingly respect their headings.
+          up_dir=float((up.FC_AD_over_NC>1).mean()) if len(up) else 0.0
+          down_dir=float((down.FC_AD_over_NC<1).mean()) if len(down) else 0.0
           summary={
              "table4_up_n":len(up),"table5_down_n":len(down),"total_unique_gene_n":int(dep.gene.nunique()),
+             "up_table_fraction_FC_gt1":up_dir,"down_table_fraction_FC_lt1":down_dir,
              "candidate_hits":cand[cand.direction.notna()][["gene","direction","FC_AD_over_NC","p_value"]].to_dict("records"),
              "expected_published_total_retina_DEPs":886
           }
