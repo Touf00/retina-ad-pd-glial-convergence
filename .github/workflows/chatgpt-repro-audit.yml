@@ -2,9 +2,10 @@ name: ChatGPT clean-room reproducibility audit
 
 on:
   push:
-    branches: [chatgpt-repro-audit]
+    branches:
+      - chatgpt-repro-audit
     paths:
-      - ".github/workflows/chatgpt-repro-audit.yml"
+      - .github/workflows/chatgpt-repro-audit.yml
 
 permissions:
   contents: read
@@ -20,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
+          cache: pip
 
       - name: Show runner resources
         run: |
@@ -46,16 +47,11 @@ jobs:
           mkdir -p "$SRC/ocular_validation/Wolf_Cell_2023"
           mkdir -p "$SRC/ocular_validation/PXD073336"
 
-          # Exact Reactome V97 resource used by the historical execution.
-          curl -fL --retry 3 --connect-timeout 30 \
-            "https://download.reactome.org/97/ReactomePathways.gmt.zip" \
-            -o /tmp/reactome.zip
+          curl -fL --retry 3 --connect-timeout 30 "https://download.reactome.org/97/ReactomePathways.gmt.zip" -o /tmp/reactome.zip
           unzip -p /tmp/reactome.zip > /tmp/ReactomePathways.gmt
           echo "89983d5c1f0af11c52edfeee7323eb425580ac6281d387a528562ab1787ce56b  /tmp/ReactomePathways.gmt" | sha256sum -c -
           cp /tmp/ReactomePathways.gmt "$SRC/resources/pathways/ReactomePathways_V97.gmt"
 
-          # Exact Wolf et al. Table S7. We accept a source only if its SHA256
-          # matches the frozen historical resource identity.
           OUT="$SRC/ocular_validation/Wolf_Cell_2023/NIHMS1931846-supplement-8.xlsx"
           EXPECTED="edf47f225ab4b8e58ef79d2a910eeb5861f352c1e907ed84d9f71e3ec063c4f3"
           rm -f "$OUT" /tmp/wolf_candidate.xlsx
@@ -64,48 +60,32 @@ jobs:
             "https://pmc.ncbi.nlm.nih.gov/articles/PMC10720485/bin/NIHMS1931846-supplement-8.xlsx" \
             "https://pmc.ncbi.nlm.nih.gov/articles/instance/10720485/bin/NIHMS1931846-supplement-8.xlsx"
           do
-            echo "Trying $u"
             if curl -fL --retry 2 --connect-timeout 30 "$u" -o /tmp/wolf_candidate.xlsx; then
-              got="$(sha256sum /tmp/wolf_candidate.xlsx | awk '{print $1}')"
-              echo "Candidate SHA256=$got"
-              if [ "$got" = "$EXPECTED" ]; then
+              GOT="$(sha256sum /tmp/wolf_candidate.xlsx | awk '{print $1}')"
+              echo "Wolf candidate: $u -> $GOT"
+              if [ "$GOT" = "$EXPECTED" ]; then
                 cp /tmp/wolf_candidate.xlsx "$OUT"
                 break
               fi
             fi
           done
 
-          # Europe PMC exposes supplementary material as an archive. Search
-          # every extracted file by SHA rather than trusting its archive name.
           if [ ! -s "$OUT" ]; then
             rm -rf /tmp/eupmc_supp /tmp/eupmc_supp.zip
             mkdir -p /tmp/eupmc_supp
-            curl -fL --retry 3 --connect-timeout 30 \
-              "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC10720485/supplementaryFiles" \
-              -o /tmp/eupmc_supp.zip
+            curl -fL --retry 3 --connect-timeout 30 "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC10720485/supplementaryFiles" -o /tmp/eupmc_supp.zip
             unzip -q /tmp/eupmc_supp.zip -d /tmp/eupmc_supp
-            export WOLF_OUT="$OUT" WOLF_EXPECTED="$EXPECTED"
-            python - <<'PY'
-import hashlib, os, shutil
-from pathlib import Path
-root = Path("/tmp/eupmc_supp")
-expected = os.environ["WOLF_EXPECTED"]
-out = Path(os.environ["WOLF_OUT"])
-for p in root.rglob("*"):
-    if not p.is_file():
-        continue
-    h = hashlib.sha256()
-    with p.open("rb") as f:
-        for b in iter(lambda: f.read(4 * 1024 * 1024), b""):
-            h.update(b)
-    if h.hexdigest() == expected:
-        out.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(p, out)
-        print("Matched exact Wolf resource:", p)
-        break
-else:
-    raise RuntimeError("Exact frozen Wolf Table S7 not found in Europe PMC supplementary archive")
-PY
+            MATCH=""
+            while IFS= read -r -d "" F; do
+              GOT="$(sha256sum "$F" | awk '{print $1}')"
+              if [ "$GOT" = "$EXPECTED" ]; then
+                MATCH="$F"
+                break
+              fi
+            done < <(find /tmp/eupmc_supp -type f -print0)
+            test -n "$MATCH"
+            cp "$MATCH" "$OUT"
+            echo "Matched exact Wolf resource: $MATCH"
           fi
 
           echo "$EXPECTED  $OUT" | sha256sum -c -
@@ -115,30 +95,15 @@ PY
         shell: bash
         run: |
           set -euxo pipefail
-          mkdir -p "$RUNNER_TEMP/retina_drive/MyDrive"
-          python - <<'PY'
-import json, os
-from pathlib import Path
-src = Path("RETINA_ND_bioRxiv_release_FRESH_TEST.ipynb")
-dst = Path("/tmp/RETINA_ND_FRESH_TEST_RUNNER.ipynb")
-nb = json.loads(src.read_text())
-drive = Path(os.environ["RUNNER_TEMP"]) / "retina_drive" / "MyDrive"
-pairs = [
-    ("/content/drive/MyDrive/RETINA_ND_V2 (1)", str(drive / "RETINA_ND_V2 (1)")),
-    ("/content/drive/MyDrive/RETINA_ND_V2", str(drive / "RETINA_ND_V2")),
-    ("/content/drive/MyDrive/RETINA_ND_RELEASE_TEST", str(drive / "RETINA_ND_RELEASE_TEST")),
-]
-for cell in nb["cells"]:
-    if cell.get("cell_type") != "code":
-        continue
-    txt = "".join(cell.get("source", []))
-    for old, new in pairs:
-        txt = txt.replace(old, new)
-    cell["source"] = txt.splitlines(keepends=True)
-dst.write_text(json.dumps(nb))
-print("Patched notebook:", dst)
-print("Runner drive:", drive)
-PY
+          BASE="$RUNNER_TEMP/retina_drive/MyDrive"
+          mkdir -p "$BASE"
+          cp RETINA_ND_bioRxiv_release_FRESH_TEST.ipynb /tmp/RETINA_ND_FRESH_TEST_RUNNER.ipynb
+          sed -i \
+            -e "s#/content/drive/MyDrive/RETINA_ND_V2 (1)#$BASE/RETINA_ND_V2 (1)#g" \
+            -e "s#/content/drive/MyDrive/RETINA_ND_V2#$BASE/RETINA_ND_V2#g" \
+            -e "s#/content/drive/MyDrive/RETINA_ND_RELEASE_TEST#$BASE/RETINA_ND_RELEASE_TEST#g" \
+            /tmp/RETINA_ND_FRESH_TEST_RUNNER.ipynb
+          grep -o "$BASE/RETINA_ND[^\\\"]*" /tmp/RETINA_ND_FRESH_TEST_RUNNER.ipynb | head
 
       - name: Execute fresh notebook end to end
         shell: bash
@@ -162,13 +127,7 @@ PY
           cp /tmp/retina_execution.log /tmp/audit_bundle/ 2>/dev/null || true
           cp /tmp/RETINA_ND_FRESH_EXECUTED.ipynb /tmp/audit_bundle/ 2>/dev/null || true
           ROOT="$RUNNER_TEMP/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST"
-          find "$ROOT" -maxdepth 4 -type f \( \
-            -name "*FINAL*QC*" -o \
-            -name "*CONVERGENCE*SUMMARY*" -o \
-            -name "*R3*NULL*" -o \
-            -name "*CANDIDATE*RANKING*" -o \
-            -name "release_environment_snapshot.json" \
-          \) -size -20M -exec cp {} /tmp/audit_bundle/ \; 2>/dev/null || true
+          find "$ROOT" -maxdepth 5 -type f \( -name "*FINAL*QC*" -o -name "*CONVERGENCE*SUMMARY*" -o -name "*R3*NULL*" -o -name "*CANDIDATE*RANKING*" -o -name "release_environment_snapshot.json" \) -size -20M -exec cp {} /tmp/audit_bundle/ \; 2>/dev/null || true
           find "$ROOT/logs" -maxdepth 1 -type f -size -5M -exec cp {} /tmp/audit_bundle/ \; 2>/dev/null || true
           df -h > /tmp/audit_bundle/disk_final.txt
           free -h > /tmp/audit_bundle/memory_final.txt
