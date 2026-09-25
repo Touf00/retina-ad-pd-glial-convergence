@@ -1,3 +1,11 @@
+### GSE157827 single-BLAS-thread repeatability — IDENTICAL HARMONY, DIFFERENT CLUSTERING
+- Run 36173634884 completed two independent Python 3.13 historical-like replicates with OMP, OpenBLAS, MKL, NumExpr, BLIS, and vecLib thread counts all capped at one.
+- Both jobs reported OpenBLAS 0.3.27, one thread, and `SkylakeX` architecture. Both selected the same HVGs (`hvg_sha256=014bf287fda4631a8a77332ee2fc03bbc7142f288fcff5c6135a1bb821480d8c`) and produced the exact same Harmony20 bytes (`harmony20_sha256=c04803a37a1400759c01ddc2f8d1f49641acfe3f9366beec6a2aed7a6da271a8`).
+- Replicate 1 nevertheless produced 29 clusters; label-invariant partition SHA-256 `12b3b23705b7033b321a2648b23917cb90828da1c268f06d347bc1f7bc588d59`. Artifact 10880533754, expires 2026-10-02 18:31:48 UTC.
+- Replicate 2 produced 31 clusters; label-invariant partition SHA-256 `ba8b4f14f6563feeff4ad5bb65cd92f1fa0d2843240f723b2f619f0633a8bc39`. Artifact 10880553949, expires 2026-10-02 18:32:51 UTC.
+- This is decisive localization: the cross-run 29-vs-31 drift occurs after the identical saved Harmony matrix, in neighbor-graph construction and/or Leiden. The earlier same-process isolated comparison showed only that dependency pin changes do not alter a graph/partition within one runtime; it did not establish cross-run determinism.
+- Capping BLAS/OpenMP threads is insufficient. The next and shortest remaining test is to add `NUMBA_NUM_THREADS=1`, because Scanpy's approximate-neighbor path uses PyNNDescent/Numba and this layer remained uncontrolled.
+
 ### GSE157827 historical-like Python 3.13 environment — 29/31 CROSS-RUN DRIFT CONFIRMED
 - Run 36169236711 completed the focused STEP26A1 notebook successfully under Python 3.13.15, numpy 2.1.3, pandas 2.3.3, scipy 1.16.3, anndata 0.13.3.post0, scanpy 1.12.4, scikit-learn 1.6.1, harmonypy 2.0.0, igraph 1.0.0, and leidenalg 0.12.0.
 - The workflow failed only in the result-extraction step because it looked for the STEP26A1 lock in `annotation_provisional`; the notebook writes that lock to the top-level `locks` directory.
