@@ -1,3 +1,11 @@
+### GSE157827 historical-like Python 3.13 environment — RESULT RECOVERED; EXTRACTION FIX RELAUNCHED
+- Run 36169236711 completed the focused STEP26A1 notebook successfully under Python 3.13.15, numpy 2.1.3, pandas 2.3.3, scipy 1.16.3, anndata 0.13.3.post0, scanpy 1.12.4, scikit-learn 1.6.1, harmonypy 2.0.0, igraph 1.0.0, and leidenalg 0.12.0.
+- The workflow failed only in the result-extraction step because it looked for the STEP26A1 lock in `annotation_provisional`; the notebook writes that lock to the top-level `locks` directory.
+- Artifact 10879377749 was uploaded despite the extraction failure. Direct inspection of its cluster assignments recovered 169,506 cells and 29 clusters, with labels 0 through 28.
+- Therefore the historical-like Python 3.13 environment does NOT restore the archival 28-cluster result. It independently reproduces the recent 29-cluster focused rebuild.
+- The workflow was patched only to read and collect the lock from its actual path. A relaunch will verify the structured result and preserve the lock metadata; no analysis parameters were changed.
+- Next controlled question after verification: determine why nominally similar focused reconstructions have produced 29 versus 31, then document whether the archival 28 can be localized beyond an unarchived numerical/runtime state.
+
 ### GSE157827 HVG / normalization / PCA localization — COMPLETED
 - Run 36166577734 completed successfully.
 - Focused rebuild unexpectedly produced 29 clusters (not the prior 31), despite the same nominal clean-room package stack. This demonstrates that the full upstream PCA/Harmony reconstruction is not perfectly invariant across independent fresh runs.
@@ -293,4 +301,5 @@ After every major milestone, update this file with:
 - exact result;
 - exact failure if any;
 - next action.
+
 
