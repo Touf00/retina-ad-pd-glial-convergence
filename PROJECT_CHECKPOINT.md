@@ -1,3 +1,13 @@
+### GSE157827 donor-level effect robustness — COMPLETE
+- Run 36184453396 completed successfully after the sensitivity workflow was debugged through the archival-count assertions without changing the biological mapping rules.
+- Default-vs-exact donor-level effect concordance:
+  - Astro: 17,247 overlapping genes; LFC Spearman 0.9649; Wald Spearman 0.9722; sign agreement 93.74%; top-5%-effect sign agreement 99.54%; primary FDR 0 vs 0; PMD FDR 0 vs 0.
+  - Micro: 16,622 genes; LFC Spearman 0.9376; Wald 0.9511; sign agreement 91.91%; top-5% 99.16%; primary FDR 0 vs 0; PMD FDR 0 vs 0.
+  - OPC: 15,648 genes; LFC Spearman 0.5380; Wald 0.5671; sign agreement 70.46%; top-5% 85.82%; primary FDR 0 vs 0; PMD FDR 0 vs 0. Donor eligibility changed 21 vs 19.
+  - Oligo: 16,055 genes; LFC Spearman 0.8963; Wald 0.9153; sign agreement 87.91%; top-5% 99.13%; primary FDR 4 vs 4; PMD FDR 2 vs 2.
+- Cell partitioning can vary substantially across hosted runs, especially OPC/oligodendrocyte lineage assignment, yet the primary FDR-level conclusion is unchanged in all four classes. Astro/Micro/Oligo effect vectors are highly stable; OPC effect magnitudes are only moderately stable and must be carried into the AD discovery-to-replication sensitivity analysis.
+- Next required test: compare the frozen GSE174367 AD discovery effects against BOTH GSE157827 clustering variants using the original Step-30 metrics. This determines whether the manuscript's AD replication/concordance claim survives the OPC partition instability.
+
 ### GSE157827 deterministic annotation robustness — TARGET COMPOSITION MOSTLY STABLE EXCEPT OPC
 - Run 36180304636 completed successfully through disease-blind provisional annotation and application of the original rule-based final target mapping, with archival cluster-ID/count assertions removed only for sensitivity testing.
 - This hosted run produced 29 clusters and 5 low-margin clusters.
