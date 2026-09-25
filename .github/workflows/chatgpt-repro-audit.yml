@@ -71,6 +71,22 @@ jobs:
           done
 
           if [ ! -s "$OUT" ]; then
+            for I in $(seq 1 12); do
+              CAND="/tmp/wolf_els_$I.xlsx"
+              URL="https://ars.els-cdn.com/content/image/1-s2.0-S0092867423010334-mmc$I.xlsx"
+              if curl -fL --retry 2 --connect-timeout 30 "$URL" -o "$CAND"; then
+                GOT="$(sha256sum "$CAND" | awk '{print $1}')"
+                echo "Elsevier mmc$I -> $GOT ($(wc -c < "$CAND") bytes)"
+                if [ "$GOT" = "$EXPECTED" ]; then
+                  cp "$CAND" "$OUT"
+                  echo "Matched exact Wolf resource via Elsevier mmc$I.xlsx"
+                  break
+                fi
+              fi
+            done
+          fi
+
+          if [ ! -s "$OUT" ]; then
             curl -fsSL "https://www.ncbi.nlm.nih.gov/research/bionlp/RESTful/supplmat.cgi/BioC_JSON/PMC10720485/LIST" -o /tmp/wolf_supp_list.txt || true
             echo "BioC supplementary listing:"
             head -c 4000 /tmp/wolf_supp_list.txt || true
