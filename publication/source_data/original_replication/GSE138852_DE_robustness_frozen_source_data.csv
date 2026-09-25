@@ -1,0 +1,5 @@
+cell_type,donors,AD,Control,eligible_nuclei,tested_genes,primary_FDR,PMI_FDR
+Astro,12,6,6,2129,10458,469,198
+Micro,10,5,5,408,7009,30,0
+OPC,12,6,6,1056,9826,138,27
+Oligo,12,6,6,7253,10667,440,212

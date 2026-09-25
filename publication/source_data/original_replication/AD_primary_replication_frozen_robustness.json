@@ -1,0 +1,26 @@
+{
+  "primary_FDR_counts": {
+    "Astro": 0,
+    "Micro": 0,
+    "OPC": 0,
+    "Oligo": 4
+  },
+  "PMD_FDR_counts": {
+    "Astro": 0,
+    "Micro": 0,
+    "OPC": 0,
+    "Oligo": 1
+  },
+  "OPC_cellcount20": {
+    "OPC_sensitivity_donors": 12,
+    "AD": 7,
+    "Control": 5,
+    "tested_genes": 15145,
+    "FDR": 0,
+    "LFC_pearson": 0.9268640706459932,
+    "LFC_spearman": 0.9279787816889752,
+    "Wald_spearman": 0.9340710771611961
+  },
+  "Oligo_primary_FDR_hits_all_same_direction_PMD": true,
+  "Oligo_primary_FDR_hits_all_PMD_nominal": true
+}

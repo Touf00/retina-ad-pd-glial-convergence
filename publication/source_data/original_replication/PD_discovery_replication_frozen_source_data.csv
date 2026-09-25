@@ -1,0 +1,5 @@
+cell_type,matched_unique_genes,LFC_spearman,LFC_permutation_q_BH,Wald_spearman,Wald_permutation_q_BH,all_gene_direction_concordance,vector_level_replication_supported,discovery_FDR_total,discovery_FDR_measurable,same_direction,same_direction_fraction,direction_binomial_q_BH,gene_level_replication_success,gene_level_replication_fraction,replication_FDR_same_direction,gene_level_replication_success_PMI_supported
+Astro,16460,0.2248951159524824,0.000133,0.24774251487102902,0.000133,0.5759416767922235,True,18,18,13,0.7222222222222222,0.192505,4,0.2222222222222222,0,3
+Micro,15283,-0.02409736663067012,0.9989,0.026362773225425785,0.0004,0.5169796505921612,False,144,141,36,0.2553191489361702,1.0,3,0.02127659574468085,0,2
+OPC,15665,0.10876192070858962,0.000133,0.15458377281517324,0.000133,0.5463134375997446,True,1,1,1,1.0,0.666667,1,1.0,0,0
+Oligo,15030,0.2837557803320344,0.000133,0.3415968827330343,0.000133,0.6095143047238856,True,2,2,2,1.0,0.5,0,0.0,0,0

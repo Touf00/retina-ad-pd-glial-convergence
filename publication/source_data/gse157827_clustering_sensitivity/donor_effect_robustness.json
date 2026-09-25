@@ -1,0 +1,115 @@
+{
+  "effect_comparison": [
+    {
+      "cell_type": "Astro",
+      "n_overlap_genes": 17247,
+      "lfc_spearman": 0.9649241412756475,
+      "lfc_pearson": 0.9671129135079408,
+      "wald_spearman": 0.972229939339672,
+      "sign_agreement": 0.9374383950832029,
+      "top5pct_abs_lfc_sign_agreement": 0.9953650057937428,
+      "default_n_donors": 21,
+      "exact_n_donors": 21,
+      "default_primary_FDR": 0,
+      "exact_primary_FDR": 0,
+      "default_PMD_FDR": 0,
+      "exact_PMD_FDR": 0,
+      "default_tested_genes": 17450,
+      "exact_tested_genes": 17393
+    },
+    {
+      "cell_type": "Micro",
+      "n_overlap_genes": 16622,
+      "lfc_spearman": 0.9376185177485505,
+      "lfc_pearson": 0.9457194187886491,
+      "wald_spearman": 0.9510709853019303,
+      "sign_agreement": 0.919143304054867,
+      "top5pct_abs_lfc_sign_agreement": 0.9915865384615384,
+      "default_n_donors": 20,
+      "exact_n_donors": 20,
+      "default_primary_FDR": 0,
+      "exact_primary_FDR": 0,
+      "default_PMD_FDR": 0,
+      "exact_PMD_FDR": 0,
+      "default_tested_genes": 16738,
+      "exact_tested_genes": 16880
+    },
+    {
+      "cell_type": "OPC",
+      "n_overlap_genes": 15648,
+      "lfc_spearman": 0.53804710528372,
+      "lfc_pearson": 0.5487934288549727,
+      "wald_spearman": 0.5671260170818646,
+      "sign_agreement": 0.7046267893660532,
+      "top5pct_abs_lfc_sign_agreement": 0.8582375478927203,
+      "default_n_donors": 21,
+      "exact_n_donors": 19,
+      "default_primary_FDR": 0,
+      "exact_primary_FDR": 0,
+      "default_PMD_FDR": 0,
+      "exact_PMD_FDR": 0,
+      "default_tested_genes": 16545,
+      "exact_tested_genes": 16101
+    },
+    {
+      "cell_type": "Oligo",
+      "n_overlap_genes": 16055,
+      "lfc_spearman": 0.896345760286719,
+      "lfc_pearson": 0.9101124075186419,
+      "wald_spearman": 0.9153262783861094,
+      "sign_agreement": 0.8791030831516662,
+      "top5pct_abs_lfc_sign_agreement": 0.9912826899128269,
+      "default_n_donors": 20,
+      "exact_n_donors": 21,
+      "default_primary_FDR": 4,
+      "exact_primary_FDR": 4,
+      "default_PMD_FDR": 2,
+      "exact_PMD_FDR": 2,
+      "default_tested_genes": 16201,
+      "exact_tested_genes": 16406
+    }
+  ],
+  "cell_count_comparison": [
+    {
+      "cell_type": "Astro",
+      "n_nuclei_default": 19881,
+      "fraction_default": 0.1172878836147393,
+      "n_nuclei_exact": 18618,
+      "fraction_exact": 0.1098368199355775
+    },
+    {
+      "cell_type": "Micro",
+      "n_nuclei_default": 7947,
+      "fraction_default": 0.0468832961665073,
+      "n_nuclei_exact": 8226,
+      "fraction_exact": 0.0485292556015716
+    },
+    {
+      "cell_type": "OPC",
+      "n_nuclei_default": 19780,
+      "fraction_default": 0.1166920345002536,
+      "n_nuclei_exact": 2755,
+      "fraction_exact": 0.0162531119842365
+    },
+    {
+      "cell_type": "Oligo",
+      "n_nuclei_default": 22603,
+      "fraction_default": 0.1333463122249359,
+      "n_nuclei_exact": 41117,
+      "fraction_exact": 0.2425695845574788
+    },
+    {
+      "cell_type": "Other",
+      "n_nuclei_default": 99295,
+      "fraction_default": 0.5857904734935636,
+      "n_nuclei_exact": 98790,
+      "fraction_exact": 0.5828112279211355
+    }
+  ],
+  "archival_primary_FDR_expected": {
+    "Astro": 0,
+    "Micro": 0,
+    "OPC": 0,
+    "Oligo": 4
+  }
+}

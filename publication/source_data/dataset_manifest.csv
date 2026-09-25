@@ -1,0 +1,13 @@
+dataset,disease_context,tissue,assay,publication_role,tier,n_case,n_control,notes
+GSE243639,PD,SNpc,snRNA-seq,primary_PD_discovery,CORE,15,14,original study
+GSE157783,PD,midbrain,snRNA-seq,primary_PD_replication,CORE,5,6,original study
+GSE174367,AD,PFC,snRNA-seq,primary_AD_discovery,CORE,11,7,original study
+GSE157827,AD,PFC,snRNA-seq,primary_AD_replication,CORE,12,9,original study; clustering sensitivity retained
+GSE138852,AD,entorhinal cortex,snRNA-seq,secondary_AD_external_replication,CORE,6,6,microglia 5 AD / 5 control
+GSE222494,AD,brain,snRNA-seq,external_AD_cross_cohort_sensitivity,EXTENSION,8,8,sporadic AD vs control only; E280A excluded
+GSE329625,PD,brain,snRNA-seq,external_PD_cross_cohort_sensitivity,EXTENSION,,,ILBD excluded
+GSE148077,reference,retina,scRNA-seq,healthy_retina_expression_gate,SUPPORT,,,7 retinal donors scanned in frozen gate
+PXD073336,AD,retina + hippocampus,proteomics,AD_retina_primary_ocular_support,CORE_RETINA,8,8,retinal proteomics used in original multimodal ranking
+Wolf_Cell_2023,PD,aqueous humor,SomaScan,PD_ocular_support,CORE_RETINA,5,19,aqueous humor; not retina
+PXD040225,AD,retina,proteomics,independent_AD_retina_sensitivity,EXTENSION,,,844 unique genes extracted from significant DEP tables; ITGAM overlap
+PXD066087,PD model,mouse retina,TMT proteomics,qualitative_cross_species_context_only,EXCLUDED_QUANT,,,raw/search files only for public quantitative audit; not human validation
