@@ -1,0 +1,269 @@
+name: ChatGPT vascular feasibility audit
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-vascular-audit.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  vascular-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy openpyxl requests
+
+      - name: Run donor-level vascular coverage audit
+        shell: bash
+        run: |
+          cat > /tmp/vascular_audit.py <<'PY'
+          from pathlib import Path
+          import io, re, tarfile, hashlib, csv, gzip, json, warnings
+          from collections import Counter
+          import numpy as np
+          import pandas as pd
+          import requests
+
+          OUT = Path("/tmp/vascular_audit")
+          DL = OUT/"downloads"
+          OUT.mkdir(exist_ok=True)
+          DL.mkdir(exist_ok=True)
+
+          urls = {
+              "GSE157783_cell_metadata":"https://ftp.ncbi.nlm.nih.gov/geo/series/GSE157nnn/GSE157783/suppl/GSE157783_IPDCO_hg_midbrain_cell.tar.gz",
+              "GSE243639_clinical":"https://ftp.ncbi.nlm.nih.gov/geo/series/GSE243nnn/GSE243639/suppl/GSE243639_Clinical_data.csv.gz",
+              "GSE243639_annotations":"https://ftp.ncbi.nlm.nih.gov/geo/series/GSE243nnn/GSE243639/suppl/GSE243639_UMAP_coordinates.xlsx",
+              "GSE184950_add2":"https://ftp.ncbi.nlm.nih.gov/geo/series/GSE184nnn/GSE184950/suppl/GSE184950_add2.xlsx",
+          }
+
+          def sha256(p):
+              h=hashlib.sha256()
+              with open(p,"rb") as f:
+                  for b in iter(lambda:f.read(1024*1024),b""):
+                      h.update(b)
+              return h.hexdigest()
+
+          manifest=[]
+          for key,url in urls.items():
+              p=DL/url.split("/")[-1]
+              r=requests.get(url,timeout=180)
+              r.raise_for_status()
+              p.write_bytes(r.content)
+              manifest.append({"resource":key,"url":url,"bytes":p.stat().st_size,"sha256":sha256(p)})
+          pd.DataFrame(manifest).to_csv(OUT/"download_manifest.csv",index=False)
+
+          # ---------- GSE157783 ----------
+          tar=DL/"GSE157783_IPDCO_hg_midbrain_cell.tar.gz"
+          ex=DL/"GSE157783_cell_metadata"
+          ex.mkdir(exist_ok=True)
+          with tarfile.open(tar,"r:gz") as tf:
+              tf.extractall(ex)
+
+          def read_flex(p):
+              n=p.name.lower()
+              if n.endswith(".csv"): return pd.read_csv(p)
+              if n.endswith(".csv.gz"): return pd.read_csv(p,compression="gzip")
+              if n.endswith(".tsv") or n.endswith(".txt"): return pd.read_csv(p,sep=None,engine="python")
+              if n.endswith(".tsv.gz") or n.endswith(".txt.gz"): return pd.read_csv(p,sep=None,engine="python",compression="gzip")
+              return pd.read_csv(p,sep=None,engine="python")
+
+          loaded=[]
+          for p in ex.rglob("*"):
+              if not p.is_file(): continue
+              try:
+                  loaded.append((p,read_flex(p)))
+              except Exception:
+                  pass
+          if not loaded: raise RuntimeError("No GSE157783 metadata parsed")
+
+          kw=["endothelial","endotheli","pericyte","peri","astro","microgl","oligo","opc","neuron","epend"]
+          cand=[]
+          for p,df in loaded:
+              for c in df.columns:
+                  vals=df[c].astype(str).str.lower()
+                  un=vals.dropna().unique()
+                  if len(un)==0 or len(un)>500: continue
+                  joined=" ".join(un[:500])
+                  score=sum(k in joined for k in kw)
+                  if score:
+                      cand.append((score,len(un),str(p),c))
+          if not cand: raise RuntimeError("No GSE157783 annotation column found")
+          cand=sorted(cand,key=lambda x:(-x[0],x[1]))
+          _,_,best_path,anncol=cand[0]
+          cell157=next(df.copy() for p,df in loaded if str(p)==best_path)
+
+          known=[f"IPD{i}" for i in range(1,6)]+[f"C{i}" for i in range(1,7)]
+          donor_candidates=[]
+          for c in cell157.columns:
+              s=cell157[c].astype(str)
+              exact=int(s.isin(known).sum())
+              contains=sum(int(s.str.contains(rf"(^|[^A-Za-z0-9]){re.escape(k)}([^A-Za-z0-9]|$)",case=False,regex=True,na=False).sum()) for k in known)
+              if exact or contains:
+                  donor_candidates.append((exact,contains,c))
+          donor_candidates=sorted(donor_candidates,reverse=True)
+          if donor_candidates and donor_candidates[0][0]>0:
+              donor_col=donor_candidates[0][2]
+              cell157["donor_id"]=cell157[donor_col].astype(str)
+          else:
+              idcols=[c for c in cell157.columns if any(k in c.lower() for k in ["cell","sample","donor","patient","id"])]
+              if not idcols: idcols=list(cell157.columns[:3])
+              joined=cell157[idcols].astype(str).agg(" | ".join,axis=1)
+              def infer(txt):
+                  for d in sorted(known,key=len,reverse=True):
+                      if re.search(rf"(^|[^A-Za-z0-9]){re.escape(d)}([^A-Za-z0-9]|$)",str(txt),flags=re.I):
+                          return d
+                  return np.nan
+              cell157["donor_id"]=joined.map(infer)
+
+          def harm157(label):
+              x=str(label).strip().lower()
+              if "endothel" in x:return "Endothelial"
+              if "pericy" in x or x in {"peri","per"}:return "Pericyte"
+              if "astro" in x:return "Astrocyte"
+              if "microgl" in x:return "Microglia"
+              if "fibro" in x or "vlmc" in x:return "Fibroblast_VLMC"
+              if "smooth" in x or x=="smc":return "Smooth_muscle"
+              return "Other"
+          cell157["cell_compartment"]=cell157[anncol].map(harm157)
+          cov157=(cell157.dropna(subset=["donor_id"]).groupby(["donor_id","cell_compartment"]).size().unstack(fill_value=0).reset_index())
+          for cc in ["Endothelial","Pericyte","Fibroblast_VLMC","Smooth_muscle","Astrocyte","Microglia"]:
+              if cc not in cov157.columns: cov157[cc]=0
+          cov157["diagnosis"]=np.where(cov157["donor_id"].str.upper().str.startswith("IPD"),"PD","Control")
+          cov157=cov157.sort_values(["diagnosis","donor_id"]).reset_index(drop=True)
+          cov157.to_csv(OUT/"GSE157783_donor_celltype_coverage.csv",index=False)
+
+          # ---------- GSE243639 ----------
+          clinp=DL/"GSE243639_Clinical_data.csv.gz"
+          with gzip.open(clinp,"rt",encoding="utf-8-sig",errors="strict",newline="") as f:
+              txt=f.read()
+          raw=[x for x in txt.splitlines() if x.strip()]
+          audits=[]
+          for delim in [",",";","\t","|"]:
+              rows=[r for r in csv.reader(io.StringIO(txt),delimiter=delim,quotechar='"') if any(str(x).strip() for x in r)]
+              fc=[len(r) for r in rows]; freq=Counter(fc); modal,n=freq.most_common(1)[0]
+              audits.append((delim,modal,n/len(fc)))
+          valid=[x for x in audits if x[1]>1 and x[2]>=0.95]
+          if not valid: raise RuntimeError("No stable GSE243639 delimiter")
+          valid=sorted(valid,key=lambda x:(-x[2],-x[1]))
+          delim=valid[0][0]
+          clinical=pd.read_csv(io.StringIO(txt),sep=delim,engine="python",quotechar='"',dtype=str,keep_default_na=False)
+          clinical.columns=[str(c).strip() for c in clinical.columns]
+          for c in clinical.columns:
+              clinical[c]=clinical[c].map(lambda x:x.strip() if isinstance(x,str) else x)
+          if clinical.shape[0]!=29: raise RuntimeError(f"Expected 29 GSE243639 donors, got {clinical.shape[0]}")
+
+          ann=pd.read_excel(DL/"GSE243639_UMAP_coordinates.xlsx",sheet_name=0)
+          if not {"CELL_ID","IDENT"}.issubset(ann.columns): raise RuntimeError("Expected CELL_ID/IDENT absent")
+          ann["donor_id"]=ann["CELL_ID"].astype(str).map(lambda s:s.split("_",1)[0].replace(".","_"))
+          if ann["donor_id"].nunique()!=29: raise RuntimeError("Expected 29 GSE243639 donor prefixes")
+          def harm243(label):
+              x=str(label).strip().lower()
+              if "astro" in x:return "Astrocyte"
+              if "micro" in x:return "Microglia"
+              if "vascular" in x or "vasc" in x:return "Broad_vascular"
+              if "endothel" in x:return "Endothelial"
+              if "pericy" in x:return "Pericyte"
+              if "fibro" in x or "vlmc" in x:return "Fibroblast_VLMC"
+              return "Other"
+          ann["cell_compartment"]=ann["IDENT"].map(harm243)
+
+          sample_cands=[]
+          donors=set(ann["donor_id"])
+          for c in clinical.columns:
+              norm=clinical[c].astype(str).str.replace(".","_",regex=False).str.replace("-","_",regex=False).str.strip()
+              nm=int(norm.isin(donors).sum())
+              if nm: sample_cands.append((nm,c))
+          if not sample_cands: raise RuntimeError("Could not map GSE243639 clinical rows")
+          sample_col=sorted(sample_cands,reverse=True)[0][1]
+          clinical["_donor_id_norm"]=clinical[sample_col].astype(str).str.replace(".","_",regex=False).str.replace("-","_",regex=False).str.strip()
+
+          cov243=ann.groupby(["donor_id","cell_compartment"]).size().unstack(fill_value=0).reset_index()
+          cov243=cov243.merge(clinical,left_on="donor_id",right_on="_donor_id_norm",how="left",validate="one_to_one")
+          cov243.to_csv(OUT/"GSE243639_donor_celltype_coverage_author_labels.csv",index=False)
+
+          # diagnosis column candidates, retained verbatim
+          diag_candidates=[]
+          for c in clinical.columns:
+              vals=clinical[c].astype(str).str.lower()
+              text=" | ".join(vals.unique()[:100])
+              score=sum(k in text for k in ["parkinson","control","pd","healthy"])
+              if score: diag_candidates.append({"column":c,"score":score,"values":" | ".join(map(str,clinical[c].unique()[:30]))})
+          pd.DataFrame(diag_candidates).to_csv(OUT/"GSE243639_diagnosis_column_candidates.csv",index=False)
+
+          # ---------- GSE184950 supplement audit ----------
+          p184=DL/"GSE184950_add2.xlsx"
+          xls=pd.ExcelFile(p184)
+          aud=[]
+          for sheet in xls.sheet_names:
+              df=pd.read_excel(p184,sheet_name=sheet)
+              df.to_csv(OUT/f"GSE184950_add2_{re.sub(r'[^A-Za-z0-9_.-]+','_',str(sheet))}.csv",index=False)
+              for c in df.columns:
+                  vals=df[c].dropna().astype(str); un=vals.unique(); text=" | ".join(un[:200]).lower()
+                  ds=sum(k in text for k in ["parkinson","control","braak","pd","disease"])
+                  donor_like=sum(bool(re.fullmatch(r"[ABCD]\d+|p\d+",x,flags=re.I)) for x in un[:500])
+                  if ds or donor_like:
+                      aud.append({"sheet":sheet,"column":c,"n_unique":len(un),"diagnosis_score":ds,"donor_like_values":donor_like,"examples":" | ".join(un[:25])})
+          pd.DataFrame(aud).to_csv(OUT/"GSE184950_supplement_field_audit.csv",index=False)
+
+          # ---------- compact summary ----------
+          def groupstats(df, group, cols):
+              out={}
+              for g,sub in df.groupby(group):
+                  out[g]={}
+                  for c in cols:
+                      x=pd.to_numeric(sub[c],errors="coerce").fillna(0)
+                      out[g][c]={
+                        "n_donors":int(len(x)),
+                        "n_gt0":int((x>0).sum()),
+                        "n_ge10":int((x>=10).sum()),
+                        "n_ge20":int((x>=20).sum()),
+                        "n_ge50":int((x>=50).sum()),
+                        "min":int(x.min()),
+                        "median":float(x.median()),
+                        "max":int(x.max())
+                      }
+              return out
+
+          summary={
+            "GSE157783":{
+              "annotation_column":anncol,
+              "n_donors":int(cov157["donor_id"].nunique()),
+              "total_endothelial":int(cov157["Endothelial"].sum()),
+              "total_pericyte":int(cov157["Pericyte"].sum()),
+              "by_diagnosis":groupstats(cov157,"diagnosis",["Endothelial","Pericyte"])
+            },
+            "GSE243639":{
+              "n_donors":int(cov243["donor_id"].nunique()),
+              "author_IDENT_counts":ann["IDENT"].astype(str).value_counts().to_dict(),
+              "broad_vascular_total":int(cov243.get("Broad_vascular",pd.Series(dtype=int)).sum()) if "Broad_vascular" in cov243 else 0,
+              "broad_vascular_donors_gt0":int((cov243.get("Broad_vascular",pd.Series([0]*len(cov243)))>0).sum()),
+              "sample_column":sample_col,
+              "diagnosis_candidates":diag_candidates
+            }
+          }
+          (OUT/"vascular_audit_summary.json").write_text(json.dumps(summary,indent=2))
+          print(json.dumps(summary,indent=2))
+          PY
+          python /tmp/vascular_audit.py | tee /tmp/vascular_audit.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pd-vascular-feasibility-audit
+          path: |
+            /tmp/vascular_audit/
+            /tmp/vascular_audit.log
+          retention-days: 7
