@@ -1,0 +1,9 @@
+gene,accession,AD_mean,NC_mean,FC_AD_over_NC,p_value,direction,log2FC_signed
+SCAMP5,,,,,,,
+XYLB,,,,,,,
+RABEPK,,,,,,,
+ITGAM,P11215,79.11,62.72,1.26,0.03222,up,0.3334237337251918
+CD38,,,,,,,
+CTCF,,,,,,,
+UBTD2,,,,,,,
+NAPEPLD,,,,,,,

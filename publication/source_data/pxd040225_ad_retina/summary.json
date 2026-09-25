@@ -1,0 +1,17 @@
+{
+  "table4_up_n": 423,
+  "table5_down_n": 422,
+  "total_unique_gene_n": 844,
+  "up_table_fraction_FC_gt1": 1.0,
+  "down_table_fraction_FC_lt1": 0.0,
+  "candidate_hits": [
+    {
+      "gene": "ITGAM",
+      "direction": "up",
+      "FC_AD_over_NC": 1.26,
+      "p_value": 0.03222
+    }
+  ],
+  "expected_published_total_retina_DEPs": 886,
+  "extraction_complete_vs_published_total": false
+}
