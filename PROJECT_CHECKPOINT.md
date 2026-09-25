@@ -1,3 +1,10 @@
+### GSE157827 within-run exact-neighbor repeatability — DETERMINISTIC WITHIN ONE HOST
+- Run 36178603337 completed successfully on one AMD EPYC 9V74 hosted runner using Python 3.13.15, numpy 2.1.3, scikit-learn 1.6.1, single-thread OpenBLAS/OpenMP, and the frozen Harmony20 input.
+- Two sequential exact brute-force neighbor + Leiden calculations in the same process were bit-identical: distance SHA-256 138d8724a28e15272d95573901f8a2863919c94c6090974ed1529a1859100856; connectivity SHA-256 03c6ea6250c6b97ea2e549e0fcd665a77eb778e24bf371d9ee88c657b19e9cfe; partition SHA-256 4862f1cafd6b550623b0c2980ede105374581b1c485e95dbd9e38c7ea71f46b6; 28 clusters in both repeats.
+- This establishes that the tested exact-neighbor + Leiden calculation is deterministic within a fixed host/process. The remaining cross-run differences are host/numerical-state dependent.
+- The 28-cluster count is numerically equal to the archival expected count, but this is not evidence that the cell partition matches the archival partition because archival cell assignments are unavailable.
+- Stop trying to recover the archival count by environment tweaking. Next priority is biological robustness: propagate a deterministic 28-cluster exact-neighbor partition through the frozen annotation logic and compare its cell-type calls / downstream donor-level effects against the fresh default-clustering result. The scientific question is whether conclusions are robust to the clustering instability, not whether a particular integer cluster count can be forced.
+
 ### GSE157827 exact brute-force neighbors — CROSS-RUN DRIFT PERSISTS
 - Run 36177674976 completed successfully. Both jobs used the exact same frozen Harmony20 file, scikit-learn KNeighborsTransformer with algorithm=brute, Euclidean distance, n_jobs=1, and single-thread environment limits.
 - Replicate 1: distance SHA-256 1345c06daf735c66cf82af5a222dcb9fde22241c5be2f9dd5c3661dd53ca06a5; connectivity SHA-256 5c57d8a729630e7612a368718e71e9febbd896fed174d12d42c701fe1501e210; 30 clusters.
