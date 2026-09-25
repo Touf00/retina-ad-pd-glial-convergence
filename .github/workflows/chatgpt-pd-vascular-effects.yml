@@ -91,7 +91,7 @@ jobs:
           b2i={b:i for i,b in enumerate(barcodes)}
 
           genes_tbl=pd.read_csv(targets["genes"],sep="\t",header=None,dtype=str)
-          # GEO gene TSV has one header-like row in addition to expression rows.
+          # GEO gene TSV has one header-like row in addition to expression rows. Rerun after explicit alignment fix.
           # Detect and remove only if the content is explicitly header-like.
           first=" | ".join(genes_tbl.iloc[0].fillna("").astype(str).tolist()).lower()
           if any(k in first for k in ["gene_id","gene id","gene_name","gene name","symbol"]):
