@@ -87,9 +87,10 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import json, pandas as pd, importlib.metadata as im, platform
-          root=Path("/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST/GSE157827_AD_replication/annotation_provisional")
-          obs=pd.read_csv(root/"GSE157827_STEP26A1_OBS_CLUSTER_ASSIGNMENTS_v1.csv.gz")
-          lock=json.loads((root/"GSE157827_AD_REPLICATION_STEP26A1_DISEASE_BLIND_CLUSTERING_v1.json").read_text())
+          analysis_root=Path("/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST")
+          annotation_root=analysis_root/"GSE157827_AD_replication"/"annotation_provisional"
+          obs=pd.read_csv(annotation_root/"GSE157827_STEP26A1_OBS_CLUSTER_ASSIGNMENTS_v1.csv.gz")
+          lock=json.loads((analysis_root/"locks"/"GSE157827_AD_REPLICATION_STEP26A1_DISEASE_BLIND_CLUSTERING_v1.json").read_text())
           result={
             "python":platform.python_version(),
             "numpy":im.version("numpy"),
@@ -111,11 +112,8 @@ jobs:
         if: always()
         run: |
           mkdir -p /tmp/historical_hybrid_audit
-          cp /tmp/historical_hybrid.log /tmp/historical_hybrid_audit/ 2>/dev/null || true
           cp /tmp/historical_hybrid_result.json /tmp/historical_hybrid_audit/ 2>/dev/null || true
-          ROOT="/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST/GSE157827_AD_replication/annotation_provisional"
-          cp "$ROOT/GSE157827_DISEASE_BLIND_HVG1000_v1.csv" /tmp/historical_hybrid_audit/ 2>/dev/null || true
-          cp "$ROOT/GSE157827_STEP26A1_OBS_CLUSTER_ASSIGNMENTS_v1.csv.gz" /tmp/historical_hybrid_audit/ 2>/dev/null || true
+          cp "/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST/locks/GSE157827_AD_REPLICATION_STEP26A1_DISEASE_BLIND_CLUSTERING_v1.json" /tmp/historical_hybrid_audit/ 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -123,3 +121,4 @@ jobs:
           name: gse157827-historical-hybrid-env-test
           path: /tmp/historical_hybrid_audit
           retention-days: 7
+
