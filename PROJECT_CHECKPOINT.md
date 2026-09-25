@@ -1,3 +1,13 @@
+### GSE157827 HVG / normalization / PCA localization — COMPLETED
+- Run 36166577734 completed successfully.
+- Focused rebuild unexpectedly produced 29 clusters (not the prior 31), despite the same nominal clean-room package stack. This demonstrates that the full upstream PCA/Harmony reconstruction is not perfectly invariant across independent fresh runs.
+- HVG selection was identical between current and sklearn-1.6.1 alternate environments: 1000/1000 overlap, Jaccard 1.0; LOESS span 0.5 after span 0.3 numerical failure.
+- With identical raw data and identical HVGs, normalization/log1p/scale matrices were bit-identical: exact_equal=true, max_abs_diff=0.
+- PCA from the identical scaled matrix was effectively identical between sklearn 1.9.1 and 1.6.1 (absolute PC correlations ~1.0); both propagated to 29 clusters.
+- Therefore HVG selection and normalization are ruled out for this run, and sklearn 1.9.1 vs 1.6.1 alone is not sufficient to explain 28 vs 29/31.
+- Important historical evidence recovered from original GSE157827 locks: immediately before STEP26A1, the analysis environment had Python 3.13.15, numpy 2.1.3, pandas 2.2.3, scipy 1.16.3, scikit-learn 1.6.1, anndata 0.12.6, scanpy 1.11.5, harmonypy 2.0.0, igraph 1.0.0, leidenalg 0.12.0, scikit-misc 0.5.2. STEP26A1 itself upgraded/verified scanpy 1.12.4, harmonypy 2.0.0, leidenalg 0.12.0, igraph 1.0.0, scikit-misc 0.5.2 but did not pin pandas/anndata/scikit-learn.
+- Next targeted test: rerun STEP26A1 in the likely historical hybrid environment: Python 3.13.15, numpy 2.1.3, pandas 2.2.3, scipy 1.16.3, anndata 0.12.6, scanpy 1.12.4, scikit-learn 1.6.1, harmonypy 2.0.0, igraph 1.0.0, leidenalg 0.12.0, scikit-misc 0.5.2. Test whether this restores the archival 28 clusters.
+
 ### GSE157827 PCA/Harmony drift localization — COMPLETED
 - Run: 36161845545; completed successfully.
 - Rebuilt GSE157827 through PCA and Harmony in the current clean-room environment.
