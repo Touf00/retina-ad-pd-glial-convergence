@@ -152,7 +152,27 @@ jobs:
                   'EXPECTED_PRIMARY_DESIGN = {k:dict(v) for k,v in OBSERVED_PRIMARY_DESIGN.items()}',
                   "",
               ])
-              return src[:dpos]+design_diag+src[dpos:]
+              src=src[:dpos]+design_diag+src[dpos:]
+
+              old_target='''assert len(
+              target_cells
+          ) == 69005'''
+              if old_target not in src:
+                  raise RuntimeError("STEP27 archival target-cell count assertion not found")
+              src=src.replace(
+                  old_target,
+                  'print("SENSITIVITY_TARGET_CELLS", len(target_cells), "ARCHIVAL_EXPECTED", 69005)',
+                  1,
+              )
+              old_selected='assert expected_selected_cells == 69005'
+              if old_selected not in src:
+                  raise RuntimeError("STEP27 archival selected-cell count assertion not found")
+              src=src.replace(
+                  old_selected,
+                  'print("SENSITIVITY_SELECTED_CELLS", expected_selected_cells, "ARCHIVAL_EXPECTED", 69005); assert expected_selected_cells == len(target_cells)',
+                  1,
+              )
+              return src
 
           def patch_step28(src):
               old="exp={'Astro':0,'Micro':0,'OPC':0,'Oligo':4}; got=dict(zip(summary.cell_type,summary.primary_FDR)); assert got==exp,(got,exp)"
