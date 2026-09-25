@@ -46,7 +46,9 @@ jobs:
           if 4 not in starts or 5 not in starts:
               raise RuntimeError("Could not locate actual Supplementary Tables 4 and 5")
 
-          accession=re.compile(r"(?<![A-Za-z0-9])([A-NR-Z][0-9][A-Z0-9]{3}[0-9](?:-[0-9]+)?|[OPQ][0-9][A-Z0-9]{3}[0-9](?:-[0-9]+)?)(?=\s)")
+          # Canonical UniProt accessions plus 10-character UniParc/TrEMBL-style
+          # accessions (e.g. A0A0C4DH72) present in these tables.
+          accession=re.compile(r"(?<![A-Za-z0-9])((?:A0A[A-Z0-9]{7}|[A-NR-Z][0-9][A-Z0-9]{3}[0-9]|[OPQ][0-9][A-Z0-9]{3}[0-9])(?:-[0-9]+)?)(?=\s)")
           def parse_section(n,direction):
               a=starts[n]; b=starts.get(n+1,len(pages))
               txt="\n".join(pages[a:b])
@@ -75,8 +77,12 @@ jobs:
           up=parse_section(4,"up")
           down=parse_section(5,"down")
           dep=pd.concat([up,down],ignore_index=True)
-          # FC is AD/NC in the source table, so log2(FC) is already signed.
-          dep["log2FC_signed"]=np.log2(dep.FC_AD_over_NC)
+          # Source convention differs by table: Table 4 reports AD/NC (>1)
+          # for upregulated proteins, while Table 5 reports NC/AD (>1) for
+          # downregulated proteins. Convert both to signed log2(AD/NC).
+          dep["log2FC_signed"]=np.where(dep.direction.eq("up"),
+                                        np.log2(dep.FC_AD_over_NC),
+                                        -np.log2(dep.FC_AD_over_NC))
           dep.to_csv(out/"PXD040225_retina_DEPs_extracted.csv",index=False)
           candidates=["SCAMP5","XYLB","RABEPK","ITGAM","CD38","CTCF","UBTD2","NAPEPLD"]
           cand=pd.DataFrame({"gene":candidates}).merge(dep,on="gene",how="left")
@@ -89,7 +95,8 @@ jobs:
              "table4_up_n":len(up),"table5_down_n":len(down),"total_unique_gene_n":int(dep.gene.nunique()),
              "up_table_fraction_FC_gt1":up_dir,"down_table_fraction_FC_lt1":down_dir,
              "candidate_hits":cand[cand.direction.notna()][["gene","direction","FC_AD_over_NC","p_value"]].to_dict("records"),
-             "expected_published_total_retina_DEPs":886
+             "expected_published_total_retina_DEPs":886,
+             "extraction_complete_vs_published_total":int(dep.gene.nunique())==886
           }
           (out/"summary.json").write_text(json.dumps(summary,indent=2))
           print(json.dumps(summary,indent=2))
