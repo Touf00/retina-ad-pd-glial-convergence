@@ -1,3 +1,15 @@
+### GSE157827 PCA/Harmony drift localization — COMPLETED
+- Run: 36161845545; completed successfully.
+- Rebuilt GSE157827 through PCA and Harmony in the current clean-room environment.
+- PCA50 shape: 169,506 x 50; Harmony20 shape: 169,506 x 20.
+- Current pipeline produced 31 clusters.
+- Current PCA SHA256: 6b207f3855b88d5d70b5f899ab12e8b55b21a5c33ac2c2f75fdf106011684b89.
+- Current Harmony20 SHA256: 5fa4adc58581ab864546f274507e2010641d672dde3dda0e8d51e6e8b2553d95.
+- Recomputed Harmony from the exact same PCA50 matrix in a Colab-like environment (numpy 2.0.2, scikit-learn 1.6.1, harmonypy 2.0.0).
+- Colab-like Harmony produced the same SHA256 as the current Harmony20 matrix and the same 31-cluster partition.
+- Conclusion: the 31-vs-28 drift does NOT originate in Harmony or the downstream neighbors/Leiden stage. The drift must arise at or before PCA generation, most plausibly HVG selection / normalization / PCA numerical state or an earlier preprocessing difference.
+- Next step: isolate PCA/HVG by comparing the exact current HVG1000 set and PCA state against the archival/original run if available, then reproduce PCA under the historical/Colab-like stack while keeping the same cells and HVGs fixed.
+
 # RETINA-ND PROJECT CHECKPOINT
 
 Updated: 2026-09-25
