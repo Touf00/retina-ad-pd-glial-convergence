@@ -7,7 +7,7 @@ Checkpoint commit inspected: `4a98ef9`
 ## Verified workflow state at handoff
 
 - GitHub Actions checked directly on 2026-09-25 after the checkpoint commit.
-- Active/queued workflows: **none**. The two jobs previously described as live have completed successfully.
+- Active/queued workflows: `36144781563` — clean-room reproducibility audit, launched from commit `15d4c28`; currently in progress. It preserves the Harmony20 embedding, cluster assignments, HVG list, clustering lock, full `pip freeze`, and numerical-runtime details even if the downstream archival assertion fails again.
 - Latest successful milestone runs:
   - `36142383845` — full glial cross-cohort matrix; completed successfully.
   - `36142316148` — corrected vascular convergence extension; completed successfully.
