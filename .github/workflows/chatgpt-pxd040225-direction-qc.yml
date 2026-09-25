@@ -1,0 +1,82 @@
+name: ChatGPT PXD040225 direction QC
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-pxd040225-direction-qc.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  qc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install requests pypdf pandas
+      - name: Inspect exact retinal table semantics
+        run: |
+          python - <<'PY'
+          import requests,re,json
+          from pathlib import Path
+          import pypdf,pandas as pd
+          out=Path("/tmp/pxd040_direction"); out.mkdir(exist_ok=True)
+          u="https://media.springernature.com/original/springer-static/esm/art%3A10.1007%2Fs00401-023-02548-2/MediaObjects/401_2023_2548_MOESM1_ESM.pdf"
+          p=out/"supp.pdf"; rr=requests.get(u,timeout=180); rr.raise_for_status(); p.write_bytes(rr.content)
+          reader=pypdf.PdfReader(str(p))
+          pages=[x.extract_text() or "" for x in reader.pages]
+          occ={n:[] for n in [4,5,6]}
+          for i,t in enumerate(pages):
+            for n in occ:
+              if f"Supplementary Table {n}." in t: occ[n].append(i)
+          starts={n:v[-1] for n,v in occ.items() if v}
+          for n in [4,5]:
+            a=starts[n]; b=starts.get(n+1,len(pages))
+            txt="\n".join(pages[a:b])
+            (out/f"table{n}_text.txt").write_text(txt)
+            print("\n===== TABLE",n,"PAGES",a+1,"TO",b,"=====")
+            print("\n".join(txt.splitlines()[:80]))
+          # Parse rows conservatively for direction semantics only.
+          acc=re.compile(r"(?<![A-Za-z0-9])([A-NR-Z][0-9][A-Z0-9]{3}[0-9](?:-[0-9]+)?|[OPQ][0-9][A-Z0-9]{3}[0-9](?:-[0-9]+)?)(?=\s)")
+          summaries={}
+          for n in [4,5]:
+            a=starts[n]; b=starts.get(n+1,len(pages)); txt="\n".join(pages[a:b])
+            ms=list(acc.finditer(txt)); rows=[]
+            for j,m in enumerate(ms):
+              chunk=txt[m.start():(ms[j+1].start() if j+1<len(ms) else len(txt))]
+              gm=re.search(r"GN=([A-Za-z0-9_.-]+)",chunk)
+              if not gm: continue
+              nums=[]
+              for z in re.findall(r"(?<![A-Za-z])(?:\d+(?:\.\d+)?(?:E[+-]?\d+)?|\.\d+(?:E[+-]?\d+)?)",chunk[gm.end():],re.I):
+                try: nums.append(float(z))
+                except: pass
+              if len(nums)<4: continue
+              ad,nc,fc,pv=nums[-4:]
+              if pv<0 or pv>1: continue
+              rows.append((gm.group(1).upper(),ad,nc,fc,pv))
+            df=pd.DataFrame(rows,columns=["gene","AD","NC","FC_source","p"])
+            df["ratio_AD_NC"]=df.AD/df.NC
+            df.to_csv(out/f"table{n}_parsed_qc.csv",index=False)
+            summaries[n]={
+              "n":len(df),
+              "median_source_FC":float(df.FC_source.median()),
+              "fraction_source_FC_gt1":float((df.FC_source>1).mean()),
+              "fraction_AD_over_NC_gt1":float((df.ratio_AD_NC>1).mean()),
+              "median_AD_over_NC":float(df.ratio_AD_NC.median()),
+              "source_FC_matches_AD_over_NC_fraction":float(((df.FC_source-df.ratio_AD_NC).abs()/df.ratio_AD_NC<0.03).mean()),
+              "source_FC_matches_NC_over_AD_fraction":float(((df.FC_source-(1/df.ratio_AD_NC)).abs()/(1/df.ratio_AD_NC)<0.03).mean()),
+              "first10":df.head(10).to_dict("records")
+            }
+          (out/"summary.json").write_text(json.dumps(summaries,indent=2))
+          print("\nSUMMARY\n",json.dumps(summaries,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pxd040225-direction-qc
+          path: /tmp/pxd040_direction/
+          retention-days: 7
