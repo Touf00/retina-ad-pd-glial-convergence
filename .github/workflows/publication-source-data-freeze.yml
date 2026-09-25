@@ -50,6 +50,9 @@ jobs:
           cp /tmp/bootstrap/independent_AD_PD_*_merged_effects.csv.gz publication/source_data/independent_pair_bootstrap/
           cp /tmp/bootstrap/summary.json publication/source_data/independent_pair_bootstrap/
 
+      - name: Install verification dependency
+        run: python -m pip install pandas==2.3.3
+
       - name: Verify frozen publication values
         run: |
           python - <<'PY'
