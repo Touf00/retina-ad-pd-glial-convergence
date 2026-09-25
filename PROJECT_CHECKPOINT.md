@@ -130,3 +130,24 @@ Next controlled test: use the same frozen Harmony20 matrix and force Scanpy's ex
 ## Scientific guardrails
 
 Preserve negative/null findings. Do not claim universal AD/PD convergence. Do not upgrade candidate genes to biomarkers. Do not force unsupported pericyte subgroups. Keep the main branch and original source data unchanged during the audit.
+
+
+## 2026-09-26 checkpoint — pathway/multimodal source-data freeze complete
+
+Workflow run `36199325802` completed successfully. All workflow steps passed, including regeneration, manuscript-facing verification, preservation, provenance/checksums, and commit/push.
+
+Durable generated commit: `7cf73c1` (`Freeze pathway and multimodal publication source data`).
+
+Preserved tree: `publication/source_data/pathway_multimodal/` with `cross_disease/`, `final_evidence/`, `figure_source_data/`, `ocular_inputs/`, `PROVENANCE.json`, and `README.md`.
+
+Verified publication-facing results:
+- multimodal evidence rows: 59,481
+- unique ranked genes: 17,745
+- top eight: SCAMP5, XYLB, RABEPK, ITGAM, CD38, CTCF, UBTD2, NAPEPLD
+- Reactome universe: 1,551; R1 = 0; R2 = 29; R3 = 665
+- R3 profile-preserving null mean = 443.1221; 95% interval = 411–476; empirical P = 1/10001
+- revised Figure 5 completed and its matrix/edge source tables were preserved.
+
+Known reproducibility discrepancy: the regenerated global candidate-pathway map contains 69,296 records versus the archival notebook assertion of 69,297. The brittle global count gate was made diagnostic only so the downstream publication-facing Figure-5 checks could execute. Those downstream checks passed and Figure 5 completed. Do not erase this one-row discrepancy; retain it in provenance/QC documentation.
+
+This supersedes older checkpoint “Remaining work” items that were subsequently completed. The next major technical block is the final source-data completeness audit before workbook construction. Main branch and Zenodo remain unchanged.
