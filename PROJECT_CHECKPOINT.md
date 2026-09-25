@@ -1,3 +1,12 @@
+### GSE157827 deterministic annotation robustness — TARGET COMPOSITION MOSTLY STABLE EXCEPT OPC
+- Run 36180304636 completed successfully through disease-blind provisional annotation and application of the original rule-based final target mapping, with archival cluster-ID/count assertions removed only for sensitivity testing.
+- This hosted run produced 29 clusters and 5 low-margin clusters.
+- Final rule-based nuclei: Astro 17,829; Micro 8,173; OPC 2,009; Oligo 41,092; Other 100,403.
+- Versus archival expected counts: Astro -4.60%; Micro +3.34%; OPC +54.18%; Oligo -0.03%; Other -0.10%.
+- Versus the earlier fresh default 31-cluster mapping: Astro -5.00%; Micro +2.32%; OPC +331.12%; Oligo -1.62%; Other -0.11%.
+- Oligodendrocytes and the non-target pool are highly stable, astrocytes/microglia shift modestly, but OPC assignment is materially unstable because a small lineage population is sensitive to graph partitioning.
+- Donor-level expression robustness is therefore REQUIRED, especially for OPC. The next test will run two GSE157827 variants on the same hosted runner (default approximate neighbors versus exact brute-force neighbors), apply the same disease-blind mapping rules, regenerate Step27 donor pseudobulk and Step28 AD-vs-Control effects, and compare effect vectors/FDR summaries directly.
+
 ### GSE157827 within-run exact-neighbor repeatability — DETERMINISTIC WITHIN ONE HOST
 - Run 36178603337 completed successfully on one AMD EPYC 9V74 hosted runner using Python 3.13.15, numpy 2.1.3, scikit-learn 1.6.1, single-thread OpenBLAS/OpenMP, and the frozen Harmony20 input.
 - Two sequential exact brute-force neighbor + Leiden calculations in the same process were bit-identical: distance SHA-256 138d8724a28e15272d95573901f8a2863919c94c6090974ed1529a1859100856; connectivity SHA-256 03c6ea6250c6b97ea2e549e0fcd665a77eb778e24bf371d9ee88c657b19e9cfe; partition SHA-256 4862f1cafd6b550623b0c2980ede105374581b1c485e95dbd9e38c7ea71f46b6; 28 clusters in both repeats.
