@@ -1,0 +1,64 @@
+name: ChatGPT vascular coverage summary
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-vascular-coverage-summary.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pandas openpyxl requests
+      - name: Summarize subtype donor coverage
+        run: |
+          python - <<'PY'
+          import requests,pandas as pd,json
+          from pathlib import Path
+          out=Path("/tmp/vcov"); out.mkdir(exist_ok=True)
+          def get(u,p):
+            r=requests.get(u,timeout=120); r.raise_for_status(); p.write_bytes(r.content)
+          p=out/"u.xlsx"; get("https://ftp.ncbi.nlm.nih.gov/geo/series/GSE243nnn/GSE243639/suppl/GSE243639_UMAP_coordinates.xlsx",p)
+          x=pd.read_excel(p,sheet_name="HighLevelCellTypes")
+          x=x[x.IDENT.astype(str).str.upper().eq("VC")].copy()
+          x["donor_id"]=x.CELL_ID.astype(str).str.split("_",n=1).str[0].str.replace(".","_",regex=False)
+          c243=x.groupby("donor_id").size().rename("Endothelial").reset_index()
+          c243.to_csv(out/"GSE243639_endothelial_coverage.csv",index=False)
+          p=out/"m.csv.gz"; get("https://ftp.ncbi.nlm.nih.gov/geo/series/GSE174nnn/GSE174367/suppl/GSE174367_snRNA-seq_cell_meta.csv.gz",p)
+          m=pd.read_csv(p); m=m[m["Cell.Type"].eq("PER.END")].copy()
+          mp={"PER.END1":"Fibroblast_VLMC","PER.END2":"Pericyte_Mural","PER.END3":"Endothelial"}
+          m["assigned"]=m.cluster.map(mp)
+          c174=m.groupby(["SampleID","Diagnosis","assigned"]).size().unstack(fill_value=0).reset_index()
+          c174.to_csv(out/"GSE174367_vascular_coverage.csv",index=False)
+          def thresholds(df, groupcols, cellcols):
+            rows=[]
+            for cell in cellcols:
+              for t in [1,5,10,20,50]:
+                sub=df[df[cell]>=t]
+                rec={"cell":cell,"threshold":t,"n":len(sub)}
+                if "Diagnosis" in sub:
+                  rec.update({str(k):int(v) for k,v in sub.Diagnosis.value_counts().items()})
+                rows.append(rec)
+            return rows
+          summary={"GSE243639":thresholds(c243,[],["Endothelial"]),
+                   "GSE174367":thresholds(c174,[],[c for c in ["Endothelial","Pericyte_Mural","Fibroblast_VLMC"] if c in c174])}
+          print("GSE243639\n",c243.to_string(index=False))
+          print("\nGSE174367\n",c174.to_string(index=False))
+          print("\nSUMMARY\n",json.dumps(summary,indent=2))
+          (out/"summary.json").write_text(json.dumps(summary,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vascular-coverage-summary
+          path: /tmp/vcov/
+          retention-days: 7
