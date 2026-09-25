@@ -1,0 +1,169 @@
+name: Freeze vascular publication source data
+
+on:
+  push:
+    branches: [reproducibility-audit]
+    paths:
+      - ".github/workflows/vascular-source-data-freeze.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  freeze-vascular-source-data:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: reproducibility-audit
+
+      - name: Download vascular convergence artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: vascular-convergence-extension
+          path: /tmp/vascular
+          run-id: 36142316148
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download author-Endo sensitivity artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: gse157827-author-endo-sensitivity
+          path: /tmp/author_endo
+          run-id: 36147039005
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Preserve exact generated source files
+        run: |
+          set -euo pipefail
+          rm -rf publication/source_data/vascular
+          rm -rf publication/source_data/gse157827_author_endo_sensitivity
+          mkdir -p publication/source_data/vascular
+          mkdir -p publication/source_data/gse157827_author_endo_sensitivity
+
+          find /tmp/vascular/vascular_convergence -maxdepth 1 -type f \
+            \( -name "*.csv" -o -name "*.csv.gz" -o -name "*.json" \) \
+            -exec cp {} publication/source_data/vascular/ \;
+
+          cp /tmp/author_endo/GSE157827_author_Endo_effect_vector.csv.gz publication/source_data/gse157827_author_endo_sensitivity/
+          cp /tmp/author_endo/GSE157827_author_Endo_vs_AD174.csv.gz publication/source_data/gse157827_author_endo_sensitivity/
+          cp /tmp/author_endo/GSE157827_author_Endo_vs_AD222.csv.gz publication/source_data/gse157827_author_endo_sensitivity/
+          cp /tmp/author_endo/GSE157827_author_Endo_vs_PD157.csv.gz publication/source_data/gse157827_author_endo_sensitivity/
+          cp /tmp/author_endo/GSE157827_author_Endo_vs_PD243.csv.gz publication/source_data/gse157827_author_endo_sensitivity/
+          cp /tmp/author_endo/summary.csv publication/source_data/gse157827_author_endo_sensitivity/
+          cp /tmp/author_endo/summary.json publication/source_data/gse157827_author_endo_sensitivity/
+
+      - name: Install verification dependency
+        run: python -m pip install pandas==2.3.3
+
+      - name: Verify vascular frozen values
+        run: |
+          python - <<'PY'
+          import math
+          from pathlib import Path
+          import pandas as pd
+
+          root=Path("publication/source_data")
+          v=pd.read_csv(root/"vascular"/"vascular_comparison_summary.csv")
+          expected={
+            "AD_replication_Endothelial":("Endothelial",570,0.1118107,0.514035,0.007998),
+            "AD_replication_Pericyte":("Pericyte",724,0.1167905,0.542818,0.001800),
+            "PD_replication_Endothelial":("Endothelial",5876,-0.0019669,0.497788,0.883423),
+            "Cross_Endo_AD174_PD243":("Endothelial",570,0.0965672,0.538596,0.022595),
+            "Cross_Endo_AD174_PD157":("Endothelial",568,0.0542895,0.519366,0.200360),
+            "Cross_Endo_AD222_PD243":("Endothelial",6379,0.1720267,0.558395,0.000200),
+            "Cross_Endo_AD222_PD157":("Endothelial",5412,0.2006655,0.568551,0.000200),
+            "Cross_Pericyte_AD174_PD157":("Pericyte",771,0.0737727,0.533074,0.042991),
+            "Cross_Pericyte_AD222_PD157":("Pericyte",1436,0.2039182,0.560585,0.000200),
+          }
+          assert set(v.comparison)==set(expected)
+          for r in v.itertuples(index=False):
+              e=expected[r.comparison]
+              assert r.cell_class==e[0] and int(r.n_genes)==e[1]
+              assert math.isclose(float(r.rho),e[2],abs_tol=5e-7,rel_tol=0),(r.comparison,r.rho,e[2])
+              assert math.isclose(float(r.sign_agreement),e[3],abs_tol=5e-7,rel_tol=0)
+              assert math.isclose(float(r.perm_p),e[4],abs_tol=5e-7,rel_tol=0)
+
+          b=pd.read_csv(root/"vascular"/"vascular_endothelial_bootstrap_summary.csv")
+          bexp={
+            "Cross_Endo_AD174_PD243":(300,0.049546,-0.124964,0.209370,0.776667),
+            "Cross_Endo_AD174_PD157":(300,0.032249,-0.179993,0.262991,0.633333),
+            "Cross_Endo_AD222_PD243":(300,0.118139,-0.053845,0.264553,0.900000),
+            "Cross_Endo_AD222_PD157":(300,0.130659,-0.028566,0.265026,0.953333),
+          }
+          assert set(b.comparison)==set(bexp)
+          for r in b.itertuples(index=False):
+              e=bexp[r.comparison]
+              assert int(r.B)==e[0]
+              for a,z in zip((r.median_rho,r.ci2_5,r.ci97_5,r.fraction_gt0),e[1:]):
+                  assert math.isclose(float(a),z,abs_tol=5e-7,rel_tol=0),(r.comparison,a,z)
+              assert float(r.ci2_5)<0<float(r.ci97_5),r.comparison
+
+          a=pd.read_csv(root/"gse157827_author_endo_sensitivity"/"summary.csv")
+          aexp={
+            "GSE157827_author_Endo_vs_AD174":(568,0.0527021,0.519366,0.213757),
+            "GSE157827_author_Endo_vs_AD222":(4942,0.1663297,0.554634,0.000200),
+            "GSE157827_author_Endo_vs_PD243":(5150,-0.0235619,0.477670,0.096781),
+            "GSE157827_author_Endo_vs_PD157":(4585,0.1801722,0.556816,0.000200),
+          }
+          assert set(a.comparison)==set(aexp)
+          for r in a.itertuples(index=False):
+              e=aexp[r.comparison]
+              assert int(r.n_genes)==e[0]
+              assert math.isclose(float(r.rho),e[1],abs_tol=5e-7,rel_tol=0)
+              assert math.isclose(float(r.sign_agreement),e[2],abs_tol=5e-7,rel_tol=0)
+              assert math.isclose(float(r.perm_p),e[3],abs_tol=5e-7,rel_tol=0)
+
+          merged=list((root/"vascular").glob("*_merged.csv.gz"))
+          author_pairs=list((root/"gse157827_author_endo_sensitivity").glob("GSE157827_author_Endo_vs_*.csv.gz"))
+          assert len(merged)==9,merged
+          assert len(author_pairs)==4,author_pairs
+          print("VASCULAR_SOURCE_DATA_FREEZE_VERIFIED",len(v),"comparisons",len(b),"bootstrap summaries",len(a),"author-Endo comparisons",len(merged),"merged effect tables")
+          PY
+
+      - name: Write provenance and refresh checksums
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          v=Path("publication/source_data/vascular")
+          (v/"README.md").write_text("\n".join([
+              "# Exploratory vascular source data",
+              "",
+              "Exact generated outputs from workflow run 36142316148, artifact 10867267704.",
+              "Artifact digest: sha256:ceead1f0f1bca97f0981a74f451e41b562c08655818e9845fdadfc6049562bc3.",
+              "",
+              "These analyses are publication sensitivity/exploratory results. AD vascular effects replicate modestly; PD endothelial within-disease replication is absent. All four endothelial donor-bootstrap confidence intervals cross zero. GSE243639 does not provide a robust pericyte subgroup, so no PD pericyte replication claim is made.",
+              "",
+          ]))
+
+          a=Path("publication/source_data/gse157827_author_endo_sensitivity")
+          (a/"README.md").write_text("\n".join([
+              "# GSE157827 author-Endo sensitivity source data",
+              "",
+              "Exact generated outputs from workflow run 36147039005, artifact 10869811622.",
+              "Artifact digest: sha256:db4d7086fde3887bcc36d2b85a21f4ecf7c777f2b601b4e177557ec0bcf8b5d6.",
+              "",
+              "The published author Endo vector is used only as a sensitivity/context analysis. It is not equivalent to the donor-level pseudobulk analyses used elsewhere and must not be described as donor-level replication.",
+              "",
+          ]))
+
+          root=Path("publication/source_data")
+          files=sorted(p for p in root.rglob("*") if p.is_file() and p.name!="SHA256SUMS.txt")
+          lines=[]
+          for p in files:
+              h=hashlib.sha256(p.read_bytes()).hexdigest()
+              lines.append(f"{h}  {p.relative_to(root).as_posix()}")
+          (root/"SHA256SUMS.txt").write_text("\n".join(lines)+"\n")
+          PY
+
+      - name: Commit vascular publication source data
+        run: |
+          set -euo pipefail
+          git config user.name "publication-data-freeze"
+          git config user.email "actions@users.noreply.github.com"
+          git add publication/source_data
+          git commit -m "Freeze vascular publication source data"
+          git push origin HEAD:reproducibility-audit
