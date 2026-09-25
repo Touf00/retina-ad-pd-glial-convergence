@@ -1,0 +1,159 @@
+name: ChatGPT PD vascular pseudobulk
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-pd-vascular-effects.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  vascular:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install pandas numpy scipy requests
+      - name: Build GSE157783 endothelial/pericyte donor pseudobulk and effects
+        shell: bash
+        run: |
+          cat > /tmp/pdv.py <<'PY'
+          from pathlib import Path
+          import re, tarfile, requests, json
+          import numpy as np, pandas as pd
+          OUT=Path("/tmp/pdvascular"); DL=OUT/"downloads"; EX=OUT/"extract"
+          OUT.mkdir(exist_ok=True); DL.mkdir(exist_ok=True); EX.mkdir(exist_ok=True)
+          base="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE157nnn/GSE157783/suppl/"
+          files={
+            "cell":"GSE157783_IPDCO_hg_midbrain_cell.tar.gz",
+            "genes":"GSE157783_IPDCO_hg_midbrain_genes.tar.gz",
+            "UMI":"GSE157783_IPDCO_hg_midbrain_UMI.tar.gz",
+          }
+          def dl(url,p):
+            if p.exists() and p.stat().st_size:return
+            with requests.get(url,stream=True,timeout=300) as r:
+              r.raise_for_status()
+              with open(p,"wb") as f:
+                for ch in r.iter_content(8*1024*1024):
+                  if ch:f.write(ch)
+          targets={}
+          for k,fn in files.items():
+            p=DL/fn; dl(base+fn,p)
+            d=EX/k; d.mkdir(exist_ok=True)
+            with tarfile.open(p,"r:gz") as tf: tf.extractall(d)
+            cand=list(d.rglob("*.tsv"))
+            if not cand: raise RuntimeError(f"No TSV extracted for {k}")
+            targets[k]=cand[0]
+            print(k,targets[k],targets[k].stat().st_size)
+
+          cells=pd.read_csv(targets["cell"],sep="	")
+          assert {"barcode","cell_ontology","patient"}.issubset(cells.columns)
+          def canon_patient(v):
+            clean=re.sub(r"[^A-Za-z0-9]+","",str(v)).upper()
+            m=re.fullmatch(r"C(?:ONTROL)?(\d+)",clean)
+            if m:return f"C{int(m.group(1))}"
+            m=re.search(r"(\d+)$",clean)
+            if m:return f"IPD{int(m.group(1))}"
+            raise ValueError(v)
+          cells["donor"]=cells["patient"].map(canon_patient)
+          cells["diagnosis"]=np.where(cells.donor.str.startswith("IPD"),1,0)
+          def ctype(x):
+            x=str(x).lower()
+            if "endothel" in x:return "Endothelial"
+            if "pericy" in x:return "Pericyte"
+            return None
+          cells["ct"]=cells.cell_ontology.map(ctype)
+          vc=cells[cells.ct.notna()].copy()
+          cov=vc.groupby(["donor","diagnosis","ct"]).size().rename("n_nuclei").reset_index()
+          cov.to_csv(OUT/"GSE157783_vascular_coverage.csv",index=False)
+          print(cov.to_string(index=False))
+
+          # Freeze thresholds before expression: both classes keep donors with >=20 nuclei.
+          eligible={}
+          for ct in ["Endothelial","Pericyte"]:
+            x=cov[(cov.ct==ct)&(cov.n_nuclei>=20)]
+            ds=sorted(x.donor.astype(str))
+            diag=x.set_index("donor").diagnosis.to_dict()
+            if sum(diag[d]==1 for d in ds)<4 or sum(diag[d]==0 for d in ds)<4:
+              raise RuntimeError(f"Insufficient {ct} donors at threshold 20")
+            eligible[ct]=ds
+          barcodes=cells.barcode.astype(str).tolist()
+          with open(targets["UMI"],"rt",encoding="utf-8",buffering=1024*1024) as f:
+            header=f.readline().rstrip("\r\n").split("\t")
+          assert header==barcodes
+          b2i={b:i for i,b in enumerate(barcodes)}
+
+          genes_tbl=pd.read_csv(targets["genes"],sep="	",header=None)
+          # The UMI rows correspond one-to-one to gene table rows. Prefer gene symbol column
+          # if available; otherwise first column.
+          if genes_tbl.shape[1]>=2:
+            vals=genes_tbl.iloc[:,1].astype(str)
+            # choose second col only if it looks substantially more symbol-like/nonempty
+            gene_names=vals.tolist()
+          else:
+            gene_names=genes_tbl.iloc[:,0].astype(str).tolist()
+          n_genes=len(gene_names)
+          print("genes",n_genes,"cells",len(cells))
+
+          # Build group codes over full matrix columns.
+          group_keys=[]; group_indices=[]
+          for ct in ["Endothelial","Pericyte"]:
+            for donor in eligible[ct]:
+              inds=[b2i[b] for b in vc.loc[(vc.ct==ct)&(vc.donor==donor),"barcode"].astype(str)]
+              group_keys.append((ct,donor))
+              group_indices.append(np.asarray(inds,dtype=np.int64))
+          pb=np.zeros((n_genes,len(group_keys)),dtype=np.int64)
+          with open(targets["UMI"],"rt",encoding="utf-8",buffering=1024*1024) as f:
+            f.readline()
+            for gi,line in enumerate(f):
+              vals=np.fromstring(line.rstrip("\r\n"),sep="\t",dtype=np.int64)
+              if vals.size!=len(cells): raise RuntimeError((gi,vals.size,len(cells)))
+              for j,inds in enumerate(group_indices): pb[gi,j]=vals[inds].sum()
+          if gi+1!=n_genes: raise RuntimeError((gi+1,n_genes))
+
+          pbd=pd.DataFrame(pb,index=pd.Index(gene_names,name="gene"),
+                           columns=[f"{ct}__{d}" for ct,d in group_keys])
+          # aggregate duplicated symbols if present
+          pbd=pbd.groupby(level=0,sort=False).sum()
+          def logcpm_effect(sub,diag):
+            libs=sub.sum(axis=0).astype(float)
+            L=np.log2(sub.div(libs,axis=1)*1e6+0.5)
+            c=[d for d in sub.columns if diag[d]==0]; p=[d for d in sub.columns if diag[d]==1]
+            return L[p].mean(axis=1)-L[c].mean(axis=1)
+          for ct in ["Endothelial","Pericyte"]:
+            donors=eligible[ct]; cols=[f"{ct}__{d}" for d in donors]
+            sub=pbd[cols].copy(); sub.columns=donors
+            diag={d:int(vc.loc[vc.donor==d,"diagnosis"].iloc[0]) for d in donors}
+            c=[d for d in donors if diag[d]==0]; p=[d for d in donors if diag[d]==1]
+            keep=((sub[c]>=10).sum(axis=1)>=3)&((sub[p]>=10).sum(axis=1)>=3)
+            sub=sub.loc[keep]
+            eff=logcpm_effect(sub,diag)
+            sub.to_csv(OUT/f"GSE157783_{ct}_pseudobulk.csv.gz",compression="gzip")
+            pd.DataFrame({"gene":eff.index,"effect_log2cpm":eff.values}).to_csv(
+              OUT/f"GSE157783_{ct}_effects.csv.gz",index=False,compression="gzip")
+            pd.DataFrame({"donor":donors,"diagnosis":[diag[d] for d in donors],
+                          "n_nuclei":[int(cov.loc[(cov.donor==d)&(cov.ct==ct),"n_nuclei"].iloc[0]) for d in donors]}).to_csv(
+              OUT/f"GSE157783_{ct}_donors.csv",index=False)
+            print(ct,"donors",len(donors),"PD",len(p),"Control",len(c),"genes",len(sub))
+
+          summary={"threshold":20,
+                   "Endothelial":{"donors":len(eligible["Endothelial"])},
+                   "Pericyte":{"donors":len(eligible["Pericyte"])}}
+          (OUT/"summary.json").write_text(json.dumps(summary,indent=2))
+          PY
+          python /tmp/pdv.py | tee /tmp/pdvascular.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pd-vascular-pseudobulk
+          path: |
+            /tmp/pdvascular/
+            /tmp/pdvascular.log
+          retention-days: 7
