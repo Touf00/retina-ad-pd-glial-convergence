@@ -40,107 +40,105 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          FAKE_DRIVE="$RUNNER_TEMP/retina_drive/MyDrive"\n          SRC="$FAKE_DRIVE/RETINA_ND_V2"
+          BASE="$RUNNER_TEMP/retina_drive/MyDrive"
+          SRC="$BASE/RETINA_ND_V2"
           mkdir -p "$SRC/resources/pathways"
           mkdir -p "$SRC/ocular_validation/Wolf_Cell_2023"
           mkdir -p "$SRC/ocular_validation/PXD073336"
 
-          # Reactome release 97. Try the official versioned endpoint first.
-          rm -f /tmp/reactome.zip /tmp/ReactomePathways.gmt
-          for u in             "https://download.reactome.org/97/ReactomePathways.gmt.zip"             "https://reactome.org/download/archive/97/ReactomePathways.gmt.zip"
-          do
-            echo "Trying $u"
-            if curl -fL --retry 3 --connect-timeout 30 "$u" -o /tmp/reactome.zip; then
-              if unzip -p /tmp/reactome.zip > /tmp/ReactomePathways.gmt 2>/dev/null; then
-                got="$(sha256sum /tmp/ReactomePathways.gmt | awk '{print $1}')"
-                echo "Reactome SHA256=$got"
-                if [ "$got" = "89983d5c1f0af11c52edfeee7323eb425580ac6281d387a528562ab1787ce56b" ]; then
-                  cp /tmp/ReactomePathways.gmt "$SRC/resources/pathways/ReactomePathways_V97.gmt"
-                  break
-                fi
-              fi
-            fi
-          done
-          test -s "$SRC/resources/pathways/ReactomePathways_V97.gmt"
+          # Exact Reactome V97 resource used by the historical execution.
+          curl -fL --retry 3 --connect-timeout 30 \
+            "https://download.reactome.org/97/ReactomePathways.gmt.zip" \
+            -o /tmp/reactome.zip
+          unzip -p /tmp/reactome.zip > /tmp/ReactomePathways.gmt
+          echo "89983d5c1f0af11c52edfeee7323eb425580ac6281d387a528562ab1787ce56b  /tmp/ReactomePathways.gmt" | sha256sum -c -
+          cp /tmp/ReactomePathways.gmt "$SRC/resources/pathways/ReactomePathways_V97.gmt"
 
-          # Wolf et al. Cell 2023 Table S7. Try known PMC supplement paths.
+          # Exact Wolf et al. Table S7. We accept a source only if its SHA256
+          # matches the frozen historical resource identity.
           OUT="$SRC/ocular_validation/Wolf_Cell_2023/NIHMS1931846-supplement-8.xlsx"
-          rm -f "$OUT" /tmp/wolf.xlsx
-          for u in             "https://pmc.ncbi.nlm.nih.gov/articles/PMC10720485/bin/NIHMS1931846-supplement-8.xlsx"             "https://pmc.ncbi.nlm.nih.gov/articles/instance/10720485/bin/NIHMS1931846-supplement-8.xlsx"
+          EXPECTED="edf47f225ab4b8e58ef79d2a910eeb5861f352c1e907ed84d9f71e3ec063c4f3"
+          rm -f "$OUT" /tmp/wolf_candidate.xlsx
+          for u in \
+            "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10720485/bin/NIHMS1931846-supplement-8.xlsx" \
+            "https://pmc.ncbi.nlm.nih.gov/articles/PMC10720485/bin/NIHMS1931846-supplement-8.xlsx" \
+            "https://pmc.ncbi.nlm.nih.gov/articles/instance/10720485/bin/NIHMS1931846-supplement-8.xlsx"
           do
             echo "Trying $u"
-            if curl -fL --retry 3 --connect-timeout 30 "$u" -o /tmp/wolf.xlsx; then
-              got="$(sha256sum /tmp/wolf.xlsx | awk '{print $1}')"
-              echo "Wolf SHA256=$got"
-              if [ "$got" = "edf47f225ab4b8e58ef79d2a910eeb5861f352c1e907ed84d9f71e3ec063c4f3" ]; then
-                cp /tmp/wolf.xlsx "$OUT"
+            if curl -fL --retry 2 --connect-timeout 30 "$u" -o /tmp/wolf_candidate.xlsx; then
+              got="$(sha256sum /tmp/wolf_candidate.xlsx | awk '{print $1}')"
+              echo "Candidate SHA256=$got"
+              if [ "$got" = "$EXPECTED" ]; then
+                cp /tmp/wolf_candidate.xlsx "$OUT"
                 break
               fi
             fi
           done
 
-          # Fallback: download the PMC OA package and locate Table S7.
+          # Europe PMC exposes supplementary material as an archive. Search
+          # every extracted file by SHA rather than trusting its archive name.
           if [ ! -s "$OUT" ]; then
+            rm -rf /tmp/eupmc_supp /tmp/eupmc_supp.zip
+            mkdir -p /tmp/eupmc_supp
+            curl -fL --retry 3 --connect-timeout 30 \
+              "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC10720485/supplementaryFiles" \
+              -o /tmp/eupmc_supp.zip
+            unzip -q /tmp/eupmc_supp.zip -d /tmp/eupmc_supp
+            export WOLF_OUT="$OUT" WOLF_EXPECTED="$EXPECTED"
             python - <<'PY'
-          import re, requests, pathlib, tarfile, shutil
-          from urllib.parse import urlparse
-          out = pathlib.Path("$FAKE_DRIVE/RETINA_ND_V2/ocular_validation/Wolf_Cell_2023/NIHMS1931846-supplement-8.xlsx")
-          xml = requests.get("https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi?id=PMC10720485", timeout=60).text
-          hrefs = re.findall(r'href="([^"]+)"', xml)
-          pkg = next((h for h in hrefs if h.endswith(".tar.gz") or ".tar.gz" in h), None)
-          if pkg is None:
-              raise RuntimeError("PMC OA package URL not found: " + xml[:1000])
-          if pkg.startswith("ftp://"):
-              pkg = "https://" + pkg[len("ftp://"):]
-          r = requests.get(pkg, timeout=180)
-          r.raise_for_status()
-          tgz = pathlib.Path("/tmp/pmc10720485.tar.gz")
-          tgz.write_bytes(r.content)
-          extract = pathlib.Path("/tmp/pmc10720485")
-          shutil.rmtree(extract, ignore_errors=True)
-          extract.mkdir()
-          with tarfile.open(tgz, "r:gz") as tf:
-              tf.extractall(extract)
-          candidates = list(extract.rglob("*supplement-8.xlsx")) + list(extract.rglob("mmc3.xlsx"))
-          if not candidates:
-              raise RuntimeError("Wolf Table S7 not found in PMC OA package")
-          shutil.copy2(candidates[0], out)
-          print("Copied", candidates[0], "->", out)
-          PY
+import hashlib, os, shutil
+from pathlib import Path
+root = Path("/tmp/eupmc_supp")
+expected = os.environ["WOLF_EXPECTED"]
+out = Path(os.environ["WOLF_OUT"])
+for p in root.rglob("*"):
+    if not p.is_file():
+        continue
+    h = hashlib.sha256()
+    with p.open("rb") as f:
+        for b in iter(lambda: f.read(4 * 1024 * 1024), b""):
+            h.update(b)
+    if h.hexdigest() == expected:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(p, out)
+        print("Matched exact Wolf resource:", p)
+        break
+else:
+    raise RuntimeError("Exact frozen Wolf Table S7 not found in Europe PMC supplementary archive")
+PY
           fi
 
-          echo "edf47f225ab4b8e58ef79d2a910eeb5861f352c1e907ed84d9f71e3ec063c4f3  $OUT" | sha256sum -c -
+          echo "$EXPECTED  $OUT" | sha256sum -c -
           ls -lh "$SRC/resources/pathways/ReactomePathways_V97.gmt" "$OUT"
 
       - name: Patch Colab paths for hosted runner
         shell: bash
         run: |
           set -euxo pipefail
-          FAKE_DRIVE="$RUNNER_TEMP/retina_drive/MyDrive"
-          mkdir -p "$FAKE_DRIVE"
+          mkdir -p "$RUNNER_TEMP/retina_drive/MyDrive"
           python - <<'PY'
-          import json, os
-          from pathlib import Path
-          src = Path("RETINA_ND_bioRxiv_release_FRESH_TEST.ipynb")
-          dst = Path("/tmp/RETINA_ND_FRESH_TEST_RUNNER.ipynb")
-          nb = json.loads(src.read_text())
-          drive = Path(os.environ["RUNNER_TEMP"]) / "retina_drive" / "MyDrive"
-          old1 = "/content/drive/MyDrive/RETINA_ND_V2 (1)"
-          old2 = "/content/drive/MyDrive/RETINA_ND_V2"
-          old3 = "/content/drive/MyDrive/RETINA_ND_RELEASE_TEST"
-          new1 = str(drive / "RETINA_ND_V2 (1)")
-          new2 = str(drive / "RETINA_ND_V2")
-          new3 = str(drive / "RETINA_ND_RELEASE_TEST")
-          for cell in nb["cells"]:
-              if cell.get("cell_type") != "code":
-                  continue
-              txt = "".join(cell.get("source", []))
-              txt = txt.replace(old1, new1).replace(old2, new2).replace(old3, new3)
-              cell["source"] = txt.splitlines(keepends=True)
-          dst.write_text(json.dumps(nb))
-          print("Patched notebook:", dst)
-          print("Fake drive:", drive)
-          PY
+import json, os
+from pathlib import Path
+src = Path("RETINA_ND_bioRxiv_release_FRESH_TEST.ipynb")
+dst = Path("/tmp/RETINA_ND_FRESH_TEST_RUNNER.ipynb")
+nb = json.loads(src.read_text())
+drive = Path(os.environ["RUNNER_TEMP"]) / "retina_drive" / "MyDrive"
+pairs = [
+    ("/content/drive/MyDrive/RETINA_ND_V2 (1)", str(drive / "RETINA_ND_V2 (1)")),
+    ("/content/drive/MyDrive/RETINA_ND_V2", str(drive / "RETINA_ND_V2")),
+    ("/content/drive/MyDrive/RETINA_ND_RELEASE_TEST", str(drive / "RETINA_ND_RELEASE_TEST")),
+]
+for cell in nb["cells"]:
+    if cell.get("cell_type") != "code":
+        continue
+    txt = "".join(cell.get("source", []))
+    for old, new in pairs:
+        txt = txt.replace(old, new)
+    cell["source"] = txt.splitlines(keepends=True)
+dst.write_text(json.dumps(nb))
+print("Patched notebook:", dst)
+print("Runner drive:", drive)
+PY
 
       - name: Execute fresh notebook end to end
         shell: bash
@@ -164,10 +162,13 @@ jobs:
           cp /tmp/retina_execution.log /tmp/audit_bundle/ 2>/dev/null || true
           cp /tmp/RETINA_ND_FRESH_EXECUTED.ipynb /tmp/audit_bundle/ 2>/dev/null || true
           ROOT="$RUNNER_TEMP/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST"
-          for f in             "$ROOT/release_environment_snapshot.json"             "$ROOT/results/RETINA-ND_FINAL_CORE_BRAIN_DE_QC_v1.csv"             "$ROOT/results/RETINA-ND_FINAL_FIGURE_ARTIFACT_QC_v1.csv"             "$ROOT/results/RETINA-ND_FINAL_NOTEBOOK_QC_SUMMARY_v1.json"             "$ROOT/results/AD_PD_CONVERGENCE_SUMMARY_v2.csv"             "$ROOT/results/AD_PD_REACTOME_R3_RECURRENCE_NULL_AUDIT_v1.csv"             "$ROOT/results/RETINA_ND_UNIQUE_GENE_CANDIDATE_RANKING_v4.csv"
-          do
-            [ -f "$f" ] && cp "$f" /tmp/audit_bundle/
-          done
+          find "$ROOT" -maxdepth 4 -type f \( \
+            -name "*FINAL*QC*" -o \
+            -name "*CONVERGENCE*SUMMARY*" -o \
+            -name "*R3*NULL*" -o \
+            -name "*CANDIDATE*RANKING*" -o \
+            -name "release_environment_snapshot.json" \
+          \) -size -20M -exec cp {} /tmp/audit_bundle/ \; 2>/dev/null || true
           find "$ROOT/logs" -maxdepth 1 -type f -size -5M -exec cp {} /tmp/audit_bundle/ \; 2>/dev/null || true
           df -h > /tmp/audit_bundle/disk_final.txt
           free -h > /tmp/audit_bundle/memory_final.txt
