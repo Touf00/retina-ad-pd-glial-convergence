@@ -43,7 +43,7 @@ jobs:
         run: |
           cat > /tmp/vascular_conv.py <<'PY'
           from pathlib import Path
-          import re, json, requests
+          import re, json, requests, gzip
           import numpy as np, pandas as pd, h5py
           from scipy.sparse import csc_matrix
           from scipy.stats import spearmanr
@@ -171,7 +171,26 @@ jobs:
           first=" | ".join(genes_tbl.iloc[0].fillna("").astype(str).tolist()).lower()
           if "row" in [str(x).strip().lower() for x in genes_tbl.iloc[0].tolist()] or any(k in first for k in ["gene_id","gene name","gene_name","symbol"]):
               genes_tbl=genes_tbl.iloc[1:].reset_index(drop=True)
-          gene_names=genes_tbl.iloc[:,0].astype(str).tolist()
+          ensembl_ids=genes_tbl.iloc[:,0].astype(str).str.replace(r"\\..*$","",regex=True).tolist()
+          # Map Ensembl release 93 IDs to symbols, matching the original manuscript pipeline.
+          gtf_url="https://ftp.ensembl.org/pub/release-93/gtf/homo_sapiens/Homo_sapiens.GRCh38.93.gtf.gz"
+          gtf_path=Path("/tmp/Homo_sapiens.GRCh38.93.gtf.gz")
+          if not gtf_path.exists():
+              rr=requests.get(gtf_url,timeout=180); rr.raise_for_status(); gtf_path.write_bytes(rr.content)
+          id2sym={}
+          with gzip.open(gtf_path,"rt",encoding="utf-8") as gh:
+              for line in gh:
+                  if line.startswith("#") or "\tgene\t" not in line: continue
+                  mi=re.search(r'gene_id "([^"]+)"',line); ms=re.search(r'gene_name "([^"]+)"',line)
+                  if mi and ms: id2sym[mi.group(1).split(".")[0]]=ms.group(1)
+          gene_symbols=[id2sym.get(x) for x in ensembl_ids]
+          if any(x is None for x in gene_symbols):
+              miss=[ensembl_ids[i] for i,x in enumerate(gene_symbols) if x is None][:10]
+              raise RuntimeError(("Unmapped Ensembl93 IDs",miss))
+          # Direct cross-dataset matching uses only unambiguous symbols.
+          vc_sym=pd.Series(gene_symbols)
+          dup=set(vc_sym[vc_sym.duplicated(keep=False)].tolist())
+          gene_names=[None if s in dup else s for s in gene_symbols]
           umi=one(rp,"IPDCO_hg_midbrain_UMI.tsv")
           with open(umi,"rt",encoding="utf-8",buffering=1024*1024) as f:
               hdr=f.readline().rstrip("\r\n").split("\t")
@@ -189,7 +208,9 @@ jobs:
                       for d,inds in groups.items(): acc157[d].append(np.array([vals[inds].sum()],dtype=np.int64))
               nrows=gi+1
               if nrows!=len(gene_names): raise RuntimeError(("GSE157 rows",nrows,len(gene_names)))
-              pb157=pd.DataFrame({d:np.concatenate(acc157[d]) for d in elig157},index=pd.Index(gene_names,name="gene")).groupby(level=0,sort=False).sum()
+              pb157=pd.DataFrame({d:np.concatenate(acc157[d]) for d in elig157},index=pd.Index(gene_names,name="gene"))
+              pb157=pb157[pb157.index.notna()].copy()
+              if pb157.index.duplicated().any(): raise RuntimeError("Unexpected duplicated unambiguous symbols")
               e,pbf,dg,inf=save_effect("GSE157783",ct,pb157,diag157)
               pd157_effects[ct]=e; pd157_pbs[ct]=pbf; pd157_diags[ct]=dg; coverage[("157",ct)]=inf
 
