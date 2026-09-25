@@ -1,0 +1,209 @@
+name: ChatGPT GSE157827 PCA-Harmony stage audit
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-gse157827-pca-harmony-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  pca-harmony-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.14"
+
+      - name: Install current clean-room environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install nbconvert jupyter
+
+      - name: Build minimal GSE157827 notebook and seed prerequisite locks
+        run: |
+          mkdir -p /tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST/locks
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root=Path("/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST")
+          locks=root/"locks"
+          locks.mkdir(parents=True,exist_ok=True)
+
+          (locks/"AD_BRAIN_DATASET_ROLES_v1.json").write_text(json.dumps({
+            "status":"AD_DATASET_ROLES_FROZEN_BEFORE_DISEASE_EXPRESSION",
+            "primary_replication":{"dataset":"GSE157827"},
+            "primary_discovery":{"dataset":"GSE174367"}
+          },indent=2))
+          (locks/"GSE174367_AD_DISCOVERY_FINAL_ROBUSTNESS_FREEZE_v1.json").write_text(json.dumps({
+            "status":"AD_DISCOVERY_FINAL_ROBUSTNESS_FROZEN",
+            "AD_replication_performed":False,
+            "AD_PD_convergence_performed":False
+          },indent=2))
+
+          src=Path("RETINA_ND_bioRxiv_release.ipynb")
+          nb=json.loads(src.read_text())
+
+          wanted=[]
+          markers=[
+            "STEP 24 — GSE157827 AD REPLICATION RAW-DATA AUDIT",
+            "STEP 24C — COMPLETE GSE157827 RAW REPLICATION AUDIT",
+            "STEP 25 — GSE157827 REPLICATION DONOR METADATA",
+            "RETINA-ND — STEP 26A1",
+          ]
+          for marker in markers:
+            hits=[c for c in nb["cells"] if marker in "".join(c.get("source",[]))]
+            if len(hits)!=1:
+              raise RuntimeError(f"{marker}: expected one cell, got {len(hits)}")
+            cell=hits[0]
+            text="".join(cell["source"])
+            text=text.replace("/content/drive/MyDrive/RETINA_ND_V2",str(root))
+            if marker=="RETINA-ND — STEP 26A1":
+              needle="# ============================================================\n# Q. DONOR-ONLY HARMONY"
+              inject='''PCA50_DIAG_PATH = ANNO_DIR / "GSE157827_STEP26A1_PCA50_DIAGNOSTIC.npy"
+np.save(PCA50_DIAG_PATH, np.asarray(adata_hvg.obsm["X_pca"], dtype=np.float64), allow_pickle=False)
+print("PCA50_DIAGNOSTIC_SAVED", PCA50_DIAG_PATH)
+
+# ============================================================
+# Q. DONOR-ONLY HARMONY'''
+              if needle not in text:
+                raise RuntimeError("PCA injection point missing")
+              text=text.replace(needle,inject,1)
+            cell=dict(cell)
+            cell["source"]=text.splitlines(keepends=True)
+            cell["outputs"]=[]
+            cell["execution_count"]=None
+            wanted.append(cell)
+
+          mini={
+            "cells":wanted,
+            "metadata":nb.get("metadata",{}),
+            "nbformat":nb["nbformat"],
+            "nbformat_minor":nb["nbformat_minor"],
+          }
+          Path("/tmp/GSE157827_PCA_HARMONY_MINI.ipynb").write_text(json.dumps(mini))
+          print("MINI_NOTEBOOK_CELLS",len(wanted))
+          PY
+
+      - name: Rebuild GSE157827 through PCA and Harmony
+        run: |
+          set -o pipefail
+          jupyter nbconvert             --to notebook             --execute /tmp/GSE157827_PCA_HARMONY_MINI.ipynb             --output /tmp/GSE157827_PCA_HARMONY_EXECUTED.ipynb             --ExecutePreprocessor.timeout=5400             2>&1 | tee /tmp/gse157827_pca_harmony_build.log
+
+      - name: Verify current PCA-Harmony checkpoint
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import numpy as np, pandas as pd, json, hashlib
+          root=Path("/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST/GSE157827_AD_replication/annotation_provisional")
+          pca=root/"GSE157827_STEP26A1_PCA50_DIAGNOSTIC.npy"
+          harm=root/"GSE157827_STEP26A1_HARMONY20_v1.npy"
+          obs=root/"GSE157827_STEP26A1_OBS_CLUSTER_ASSIGNMENTS_v1.csv.gz"
+          hvg=root/"GSE157827_DISEASE_BLIND_HVG1000_v1.csv"
+          for p in [pca,harm,obs,hvg]:
+            if not p.exists(): raise FileNotFoundError(p)
+          P=np.load(pca,mmap_mode="r")
+          H=np.load(harm,mmap_mode="r")
+          O=pd.read_csv(obs)
+          def sha(p):
+            z=hashlib.sha256()
+            with open(p,"rb") as f:
+              for b in iter(lambda:f.read(4*1024*1024),b""): z.update(b)
+            return z.hexdigest()
+          out={
+            "pca_shape":list(P.shape),
+            "harmony_shape":list(H.shape),
+            "n_clusters_current":int(O["cluster"].astype(str).nunique()),
+            "pca_sha256":sha(pca),
+            "harmony20_sha256":sha(harm),
+            "hvg_sha256":sha(hvg),
+          }
+          print("CURRENT_STAGE_RESULT",json.dumps(out,indent=2))
+          Path("/tmp/current_stage_result.json").write_text(json.dumps(out,indent=2))
+          PY
+
+      - name: Build Colab-like Harmony environment
+        run: |
+          python -m venv /tmp/harmony_colab
+          /tmp/harmony_colab/bin/python -m pip install --upgrade pip
+          /tmp/harmony_colab/bin/python -m pip install             numpy==2.0.2             pandas==2.3.3             scipy==1.16.3             scikit-learn==1.6.1             harmonypy==2.0.0
+          /tmp/harmony_colab/bin/python - <<'PY'
+          import numpy,pandas,scipy,sklearn,harmonypy
+          print("ALT_ENV",numpy.__version__,pandas.__version__,scipy.__version__,sklearn.__version__,harmonypy.__version__)
+          PY
+
+      - name: Recompute Harmony only from identical PCA50
+        run: |
+          /tmp/harmony_colab/bin/python - <<'PY'
+          from pathlib import Path
+          import numpy as np, pandas as pd, harmonypy, json, hashlib
+          root=Path("/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST/GSE157827_AD_replication/annotation_provisional")
+          P=np.load(root/"GSE157827_STEP26A1_PCA50_DIAGNOSTIC.npy")
+          obs=pd.read_csv(root/"GSE157827_STEP26A1_OBS_CLUSTER_ASSIGNMENTS_v1.csv.gz",usecols=["donor_id"])
+          assert P.shape==(169506,50)
+          ho=harmonypy.run_harmony(P.astype(np.float64,copy=False),obs,"donor_id",max_iter_harmony=30,random_state=0)
+          Z=np.asarray(ho.Z_corr,dtype=np.float64)
+          if Z.shape==(50,169506): Z=Z.T
+          assert Z.shape==(169506,50)
+          H=Z[:,:20].astype(np.float32)
+          outp=Path("/tmp/HARMONY20_COLABLIKE_FROM_IDENTICAL_PCA.npy")
+          np.save(outp,H,allow_pickle=False)
+          h=hashlib.sha256(outp.read_bytes()).hexdigest()
+          print("ALT_HARMONY_SHA256",h)
+          Path("/tmp/alt_harmony_result.json").write_text(json.dumps({"sha256":h,"shape":list(H.shape)},indent=2))
+          PY
+
+      - name: Cluster current versus Colab-like Harmony with identical clustering stack
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import numpy as np, pandas as pd, anndata as ad, scanpy as sc, json
+          root=Path("/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST/GSE157827_AD_replication/annotation_provisional")
+          obs=pd.read_csv(root/"GSE157827_STEP26A1_OBS_CLUSTER_ASSIGNMENTS_v1.csv.gz",usecols=["donor_id","cell_uid"])
+          mats={
+            "current_harmony":np.load(root/"GSE157827_STEP26A1_HARMONY20_v1.npy"),
+            "colablike_harmony":np.load("/tmp/HARMONY20_COLABLIKE_FROM_IDENTICAL_PCA.npy"),
+          }
+          results={}
+          for label,H in mats.items():
+            a=ad.AnnData(X=np.zeros((len(obs),1),dtype=np.float32),obs=obs.copy())
+            a.obsm["X_harmony20"]=H
+            sc.pp.neighbors(a,n_neighbors=20,use_rep="X_harmony20",metric="euclidean",random_state=20260914)
+            sc.tl.leiden(a,resolution=1.0,random_state=20260914,key_added="cluster",flavor="igraph",n_iterations=2,directed=False)
+            results[label]={
+              "n_clusters":int(a.obs["cluster"].astype(str).nunique()),
+              "cluster_counts":a.obs["cluster"].astype(str).value_counts().sort_index().to_dict(),
+            }
+          results["same_cluster_count"]=results["current_harmony"]["n_clusters"]==results["colablike_harmony"]["n_clusters"]
+          results["colablike_restores_28"]=results["colablike_harmony"]["n_clusters"]==28
+          print("PCA_HARMONY_STAGE_COMPARISON",json.dumps(results,indent=2))
+          Path("/tmp/pca_harmony_stage_comparison.json").write_text(json.dumps(results,indent=2))
+          PY
+
+      - name: Collect focused audit
+        if: always()
+        run: |
+          mkdir -p /tmp/pca_harmony_audit
+          cp /tmp/gse157827_pca_harmony_build.log /tmp/pca_harmony_audit/ 2>/dev/null || true
+          cp /tmp/current_stage_result.json /tmp/pca_harmony_audit/ 2>/dev/null || true
+          cp /tmp/alt_harmony_result.json /tmp/pca_harmony_audit/ 2>/dev/null || true
+          cp /tmp/pca_harmony_stage_comparison.json /tmp/pca_harmony_audit/ 2>/dev/null || true
+          ROOT="/tmp/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST/GSE157827_AD_replication/annotation_provisional"
+          cp "$ROOT/GSE157827_STEP26A1_PCA50_DIAGNOSTIC.npy" /tmp/pca_harmony_audit/ 2>/dev/null || true
+          cp "$ROOT/GSE157827_STEP26A1_HARMONY20_v1.npy" /tmp/pca_harmony_audit/ 2>/dev/null || true
+          cp "$ROOT/GSE157827_DISEASE_BLIND_HVG1000_v1.csv" /tmp/pca_harmony_audit/ 2>/dev/null || true
+          cp /tmp/HARMONY20_COLABLIKE_FROM_IDENTICAL_PCA.npy /tmp/pca_harmony_audit/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gse157827-pca-harmony-stage-audit
+          path: /tmp/pca_harmony_audit
+          retention-days: 7
