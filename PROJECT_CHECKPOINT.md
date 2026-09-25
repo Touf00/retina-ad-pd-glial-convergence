@@ -1,3 +1,12 @@
+### GSE157827 clustering sensitivity propagated to AD replication — COMPLETE
+- Run 36186876350 completed successfully.
+- Both default-neighbor and exact-neighbor GSE157827 variants retained positive GSE174367 discovery-to-replication genome-wide concordance in all four glial classes; all LFC and Wald permutation tests were P=0.00009999.
+- Default / exact LFC Spearman: Astro 0.1822 / 0.1818; Micro 0.0450 / 0.0433; OPC 0.0534 / 0.0332; Oligo 0.1534 / 0.1635.
+- Default / exact all-gene direction concordance: Astro 57.27% / 57.14%; Micro 51.55% / 51.09%; OPC 51.65% / 51.77%; Oligo 55.90% / 56.59%.
+- Discovery-FDR gene-level replication was also essentially unchanged: Astro 0/1 measurable hit replicated in both; Micro 1/3 in both; OPC had no measurable discovery-FDR hits in either; Oligo 2 replicated genes in both, with 19/29 versus 20/30 same-direction measurable discovery hits.
+- Conclusion for reproducibility audit: the GSE157827 graph partition is not bitwise portable across hosted numerical environments and OPC assignment is particularly sensitive, but the manuscript-level AD discovery-to-replication conclusion is robust to the tested default-versus-exact clustering perturbation. Do not claim exact archival partition reproduction.
+- Clustering forensic work is CLOSED unless a later consistency check reveals a downstream dependency. Next step is to freeze the expanded scientific result set and decide the exact publication-facing analyses/tables/figures before regenerating deliverables.
+
 ### GSE157827 donor-level effect robustness — COMPLETE
 - Run 36184453396 completed successfully after the sensitivity workflow was debugged through the archival-count assertions without changing the biological mapping rules.
 - Default-vs-exact donor-level effect concordance:
