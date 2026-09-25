@@ -77,23 +77,25 @@ jobs:
               if marker=="RETINA-ND — STEP 26A1":
                   start=src.index("sc.pp.neighbors(")
                   end=src.index("\n\n\nsc.tl.leiden(",start)
-                  replacement='''from sklearn.neighbors import KNeighborsTransformer
-
-exact_transformer = KNeighborsTransformer(
-    n_neighbors=N_NEIGHBORS,
-    mode="distance",
-    metric="euclidean",
-    algorithm="brute",
-    n_jobs=1,
-)
-
-sc.pp.neighbors(
-    adata_hvg,
-    use_rep="X_harmony20",
-    method="umap",
-    transformer=exact_transformer,
-)
-'''
+                  replacement="\\n".join([
+                      "from sklearn.neighbors import KNeighborsTransformer",
+                      "",
+                      "exact_transformer = KNeighborsTransformer(",
+                      "    n_neighbors=N_NEIGHBORS,",
+                      "    mode=\\\"distance\\\",",
+                      "    metric=\\\"euclidean\\\",",
+                      "    algorithm=\\\"brute\\\",",
+                      "    n_jobs=1,",
+                      ")",
+                      "",
+                      "sc.pp.neighbors(",
+                      "    adata_hvg,",
+                      "    use_rep=\\\"X_harmony20\\\",",
+                      "    method=\\\"umap\\\",",
+                      "    transformer=exact_transformer,",
+                      ")",
+                      "",
+                  ])
                   src=src[:start]+replacement+src[end:]
                   if "KNeighborsTransformer" not in src:
                       raise RuntimeError("Exact-neighbor patch failed")
