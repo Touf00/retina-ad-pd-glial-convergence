@@ -1,0 +1,88 @@
+name: ChatGPT PXD040225 DEP extraction
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-pxd040225-deps.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install requests pypdf pandas numpy
+      - name: Extract retina up/down DEPs and compare candidates
+        run: |
+          python - <<'PY'
+          import requests,re,json
+          from pathlib import Path
+          import pypdf,pandas as pd,numpy as np
+          out=Path("/tmp/pxd040_deps"); out.mkdir(exist_ok=True)
+          u="https://media.springernature.com/original/springer-static/esm/art%3A10.1007%2Fs00401-023-02548-2/MediaObjects/401_2023_2548_MOESM1_ESM.pdf"
+          p=out/"supp.pdf"; r=requests.get(u,timeout=180); r.raise_for_status(); p.write_bytes(r.content)
+          reader=pypdf.PdfReader(str(p))
+          pages=[(x.extract_text() or "") for x in reader.pages]
+          starts={}
+          for i,t in enumerate(pages):
+              for n in range(4,12):
+                  if f"Supplementary Table {n}." in t and n not in starts:
+                      starts[n]=i
+          print("table starts", {k:v+1 for k,v in starts.items()})
+
+          accession=re.compile(r"(?<![A-Za-z0-9])([A-NR-Z][0-9][A-Z0-9]{3}[0-9](?:-[0-9]+)?|[OPQ][0-9][A-Z0-9]{3}[0-9](?:-[0-9]+)?)(?=\s)")
+          def parse_section(n,direction):
+              a=starts[n]; b=starts.get(n+1,len(pages))
+              txt="\n".join(pages[a:b])
+              # remove title/header but retain row text
+              ms=list(accession.finditer(txt))
+              rows=[]
+              for j,m in enumerate(ms):
+                  chunk=txt[m.start():(ms[j+1].start() if j+1<len(ms) else len(txt))]
+                  gm=re.search(r"GN=([A-Za-z0-9_.-]+)",chunk)
+                  if not gm: continue
+                  gene=gm.group(1).upper()
+                  # Values after last PE/SV annotation. Use numeric tokens after GN and choose last 4.
+                  tail=chunk[gm.end():]
+                  nums=re.findall(r"(?<![A-Za-z])(?:\d+(?:\.\d+)?(?:E[+-]?\d+)?|\.\d+(?:E[+-]?\d+)?)",tail,re.I)
+                  vals=[]
+                  for x in nums:
+                      try: vals.append(float(x))
+                      except: pass
+                  if len(vals)<4: continue
+                  ad,nc,fc,pv=vals[-4:]
+                  # sanity bounds
+                  if fc<=0 or pv<0 or pv>1: continue
+                  rows.append({"accession":m.group(1),"gene":gene,"AD_mean":ad,"NC_mean":nc,"FC_AD_over_NC":fc,"p_value":pv,"direction":direction})
+              df=pd.DataFrame(rows).drop_duplicates(["accession","gene","direction"])
+              return df
+          up=parse_section(4,"up")
+          down=parse_section(5,"down")
+          dep=pd.concat([up,down],ignore_index=True)
+          dep["log2FC_signed"]=np.where(dep.direction.eq("up"),np.log2(dep.FC_AD_over_NC),-np.log2(dep.FC_AD_over_NC))
+          dep.to_csv(out/"PXD040225_retina_DEPs_extracted.csv",index=False)
+          candidates=["SCAMP5","XYLB","RABEPK","ITGAM","CD38","CTCF","UBTD2","NAPEPLD"]
+          cand=pd.DataFrame({"gene":candidates}).merge(dep,on="gene",how="left")
+          cand.to_csv(out/"PXD040225_manuscript_candidate_overlap.csv",index=False)
+          summary={
+             "table4_up_n":len(up),"table5_down_n":len(down),"total_unique_gene_n":int(dep.gene.nunique()),
+             "candidate_hits":cand[cand.direction.notna()][["gene","direction","FC_AD_over_NC","p_value"]].to_dict("records"),
+             "expected_published_total_retina_DEPs":886
+          }
+          (out/"summary.json").write_text(json.dumps(summary,indent=2))
+          print(json.dumps(summary,indent=2))
+          print("\nCandidate table\n",cand.to_string(index=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pxd040225-dep-extraction
+          path: /tmp/pxd040_deps/
+          retention-days: 7
