@@ -1,0 +1,79 @@
+{
+  "pair_summary": [
+    {
+      "cell_class": "Astro",
+      "n_genes": 8999,
+      "rho": -0.08716009771586174,
+      "spearman_p": 1.2022033010834359e-16,
+      "sign_agreement": 0.48105345038337594,
+      "perm_empirical_p_two_sided": 9.999000099990002e-05,
+      "null_mean": -0.00017325714455788615,
+      "null_sd": 0.010531635585909391
+    },
+    {
+      "cell_class": "Micro",
+      "n_genes": 4931,
+      "rho": 0.04046927606697341,
+      "spearman_p": 0.004479774281741278,
+      "sign_agreement": 0.5179476779557899,
+      "perm_empirical_p_two_sided": 0.0047995200479952005,
+      "null_mean": -5.700926492230229e-05,
+      "null_sd": 0.014174103045084709
+    },
+    {
+      "cell_class": "OPC",
+      "n_genes": 6969,
+      "rho": -0.004365529840236528,
+      "spearman_p": 0.7155793922734147,
+      "sign_agreement": 0.5085378103027695,
+      "perm_empirical_p_two_sided": 0.7085291470852915,
+      "null_mean": 8.88320048905541e-05,
+      "null_sd": 0.011865304707743832
+    },
+    {
+      "cell_class": "Oligo",
+      "n_genes": 10045,
+      "rho": -0.040129004480826944,
+      "spearman_p": 5.745192725239005e-05,
+      "sign_agreement": 0.48810353409656543,
+      "perm_empirical_p_two_sided": 9.999000099990002e-05,
+      "null_mean": -4.1812810583102476e-05,
+      "null_sd": 0.009993365415815749
+    }
+  ],
+  "bootstrap_summary": [
+    {
+      "cell_class": "Astro",
+      "B": 500,
+      "median_rho": -0.051399890809696466,
+      "ci2_5": -0.14764276187800637,
+      "ci97_5": 0.059187648486425944,
+      "fraction_rho_gt0": 0.212
+    },
+    {
+      "cell_class": "Micro",
+      "B": 500,
+      "median_rho": 0.01678296978365404,
+      "ci2_5": -0.09765181889569001,
+      "ci97_5": 0.1303706235977175,
+      "fraction_rho_gt0": 0.628
+    },
+    {
+      "cell_class": "OPC",
+      "B": 500,
+      "median_rho": -0.0037152463226789063,
+      "ci2_5": -0.060804338743030054,
+      "ci97_5": 0.05238584266305638,
+      "fraction_rho_gt0": 0.44
+    },
+    {
+      "cell_class": "Oligo",
+      "B": 500,
+      "median_rho": -0.028477299294650642,
+      "ci2_5": -0.1457308627148808,
+      "ci97_5": 0.08745500082747729,
+      "fraction_rho_gt0": 0.302
+    }
+  ],
+  "note": "GSE222494 sporadic AD vs control paired with GSE329625 established PD (Braak 3-6) vs CTR; independent of original discovery pair."
+}
