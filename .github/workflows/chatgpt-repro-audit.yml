@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          SRC="/content/drive/MyDrive/RETINA_ND_V2"
+          FAKE_DRIVE="$RUNNER_TEMP/retina_drive/MyDrive"\n          SRC="$FAKE_DRIVE/RETINA_ND_V2"
           mkdir -p "$SRC/resources/pathways"
           mkdir -p "$SRC/ocular_validation/Wolf_Cell_2023"
           mkdir -p "$SRC/ocular_validation/PXD073336"
@@ -84,7 +84,7 @@ jobs:
             python - <<'PY'
           import re, requests, pathlib, tarfile, shutil
           from urllib.parse import urlparse
-          out = pathlib.Path("/content/drive/MyDrive/RETINA_ND_V2/ocular_validation/Wolf_Cell_2023/NIHMS1931846-supplement-8.xlsx")
+          out = pathlib.Path("$FAKE_DRIVE/RETINA_ND_V2/ocular_validation/Wolf_Cell_2023/NIHMS1931846-supplement-8.xlsx")
           xml = requests.get("https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi?id=PMC10720485", timeout=60).text
           hrefs = re.findall(r'href="([^"]+)"', xml)
           pkg = next((h for h in hrefs if h.endswith(".tar.gz") or ".tar.gz" in h), None)
@@ -112,13 +112,48 @@ jobs:
           echo "edf47f225ab4b8e58ef79d2a910eeb5861f352c1e907ed84d9f71e3ec063c4f3  $OUT" | sha256sum -c -
           ls -lh "$SRC/resources/pathways/ReactomePathways_V97.gmt" "$OUT"
 
+      - name: Patch Colab paths for hosted runner
+        shell: bash
+        run: |
+          set -euxo pipefail
+          FAKE_DRIVE="$RUNNER_TEMP/retina_drive/MyDrive"
+          mkdir -p "$FAKE_DRIVE"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          src = Path("RETINA_ND_bioRxiv_release_FRESH_TEST.ipynb")
+          dst = Path("/tmp/RETINA_ND_FRESH_TEST_RUNNER.ipynb")
+          nb = json.loads(src.read_text())
+          drive = Path(os.environ["RUNNER_TEMP"]) / "retina_drive" / "MyDrive"
+          old1 = "/content/drive/MyDrive/RETINA_ND_V2 (1)"
+          old2 = "/content/drive/MyDrive/RETINA_ND_V2"
+          old3 = "/content/drive/MyDrive/RETINA_ND_RELEASE_TEST"
+          new1 = str(drive / "RETINA_ND_V2 (1)")
+          new2 = str(drive / "RETINA_ND_V2")
+          new3 = str(drive / "RETINA_ND_RELEASE_TEST")
+          for cell in nb["cells"]:
+              if cell.get("cell_type") != "code":
+                  continue
+              txt = "".join(cell.get("source", []))
+              txt = txt.replace(old1, new1).replace(old2, new2).replace(old3, new3)
+              cell["source"] = txt.splitlines(keepends=True)
+          dst.write_text(json.dumps(nb))
+          print("Patched notebook:", dst)
+          print("Fake drive:", drive)
+          PY
+
       - name: Execute fresh notebook end to end
         shell: bash
         run: |
           set -o pipefail
-          rm -rf /content/drive/MyDrive/RETINA_ND_RELEASE_TEST
-          mkdir -p /content/drive/MyDrive
-          jupyter nbconvert             --to notebook             --execute RETINA_ND_bioRxiv_release_FRESH_TEST.ipynb             --output /tmp/RETINA_ND_FRESH_EXECUTED.ipynb             --ExecutePreprocessor.timeout=18000             2>&1 | tee /tmp/retina_execution.log
+          ROOT="$RUNNER_TEMP/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST"
+          rm -rf "$ROOT"
+          jupyter nbconvert \
+            --to notebook \
+            --execute /tmp/RETINA_ND_FRESH_TEST_RUNNER.ipynb \
+            --output /tmp/RETINA_ND_FRESH_EXECUTED.ipynb \
+            --ExecutePreprocessor.timeout=18000 \
+            2>&1 | tee /tmp/retina_execution.log
 
       - name: Collect audit bundle
         if: always()
@@ -128,7 +163,7 @@ jobs:
           mkdir -p /tmp/audit_bundle
           cp /tmp/retina_execution.log /tmp/audit_bundle/ 2>/dev/null || true
           cp /tmp/RETINA_ND_FRESH_EXECUTED.ipynb /tmp/audit_bundle/ 2>/dev/null || true
-          ROOT="/content/drive/MyDrive/RETINA_ND_RELEASE_TEST"
+          ROOT="$RUNNER_TEMP/retina_drive/MyDrive/RETINA_ND_RELEASE_TEST"
           for f in             "$ROOT/release_environment_snapshot.json"             "$ROOT/results/RETINA-ND_FINAL_CORE_BRAIN_DE_QC_v1.csv"             "$ROOT/results/RETINA-ND_FINAL_FIGURE_ARTIFACT_QC_v1.csv"             "$ROOT/results/RETINA-ND_FINAL_NOTEBOOK_QC_SUMMARY_v1.json"             "$ROOT/results/AD_PD_CONVERGENCE_SUMMARY_v2.csv"             "$ROOT/results/AD_PD_REACTOME_R3_RECURRENCE_NULL_AUDIT_v1.csv"             "$ROOT/results/RETINA_ND_UNIQUE_GENE_CANDIDATE_RANKING_v4.csv"
           do
             [ -f "$f" ] && cp "$f" /tmp/audit_bundle/
