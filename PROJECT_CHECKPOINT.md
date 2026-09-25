@@ -1,3 +1,10 @@
+### GSE157827 explicit single-job PyNNDescent — STILL NONDETERMINISTIC
+- Run 36177321311 completed successfully using the exact same frozen Harmony20 file in two independent jobs, PyNNDescent random_state=20260914, n_jobs=1, and all common numerical/Numba thread pools capped at one.
+- Replicate 1: distance SHA-256 c46604dbccd3f31885c66626ae59e8c52ba2fbd30ca95fb37af5f7b3196d57ce; connectivity SHA-256 9e239ade64e8ff49fadb423b5eb3d63b34ce324571692ed2b2479238928966e0; 31 clusters.
+- Replicate 2: distance SHA-256 7134e307d0bda5ebba8b723c618eb37a26e4b7da6f148292b0ff7def50ec8938; connectivity SHA-256 9cd84f68538fca07ee25bbdf32cdb962c7b09c498be2e2625bfe0a829ac84976; 27 clusters.
+- Therefore explicit PyNNDescent seeding plus n_jobs=1 is insufficient to make the neighbor graph cross-run deterministic on hosted runners.
+- Next controlled test: replace approximate PyNNDescent with scikit-learn KNeighborsTransformer using exact brute-force Euclidean search and n_jobs=1, still on the identical frozen Harmony matrix. Run two independent jobs and compare graph hashes and Leiden partitions.
+
 ### GSE157827 fixed-Harmony downstream repeatability — kNN SEARCH IS THE FIRST DIVERGENCE
 - Run 36175179052 completed successfully with two independent jobs using the exact same frozen Harmony20 file (SHA-256 5fa4adc58581ab864546f274507e2010641d672dde3dda0e8d51e6e8b2553d95).
 - Replicate 1: distance-graph SHA-256 b9582c75ac35b2362a3cf711630e7a2c4b28f8626a5f3ab4d2b6aa3d8a169ee4; connectivity SHA-256 dba620f90fcf87a5037f39feb17e0c5d21bf900d92cda47ced64bb5fd311826d; 31 clusters.
