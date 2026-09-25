@@ -90,17 +90,19 @@ jobs:
           assert header==barcodes
           b2i={b:i for i,b in enumerate(barcodes)}
 
-          genes_tbl=pd.read_csv(targets["genes"],sep="	",header=None)
-          # The UMI rows correspond one-to-one to gene table rows. Prefer gene symbol column
-          # if available; otherwise first column.
+          genes_tbl=pd.read_csv(targets["genes"],sep="\t",header=None,dtype=str)
+          # GEO gene TSV has one header-like row in addition to expression rows.
+          # Detect and remove only if the content is explicitly header-like.
+          first=" | ".join(genes_tbl.iloc[0].fillna("").astype(str).tolist()).lower()
+          if any(k in first for k in ["gene_id","gene id","gene_name","gene name","symbol"]):
+            print("Dropping detected gene-table header row:", genes_tbl.iloc[0].tolist())
+            genes_tbl=genes_tbl.iloc[1:].reset_index(drop=True)
           if genes_tbl.shape[1]>=2:
-            vals=genes_tbl.iloc[:,1].astype(str)
-            # choose second col only if it looks substantially more symbol-like/nonempty
-            gene_names=vals.tolist()
+            gene_names=genes_tbl.iloc[:,1].astype(str).tolist()
           else:
             gene_names=genes_tbl.iloc[:,0].astype(str).tolist()
           n_genes=len(gene_names)
-          print("genes",n_genes,"cells",len(cells))
+          print("genes",n_genes,"cells",len(cells),"first_gene",gene_names[0],"last_gene",gene_names[-1])
 
           # Build group codes over full matrix columns.
           group_keys=[]; group_indices=[]
