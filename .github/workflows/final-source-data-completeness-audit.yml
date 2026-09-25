@@ -181,8 +181,8 @@ jobs:
           for sheet,status,source,note in audit:
               assert not status.startswith("MISSING"), (sheet,status)
           assert len(audit)==20
-          assert sum(1 for r in audit if r[1]=="COMPLETE")==17
-          assert sum(1 for r in audit if r[1].startswith("COMPLETE_WITH"))==3
+          assert sum(1 for r in audit if r[1]=="COMPLETE")==18
+          assert sum(1 for r in audit if r[1].startswith("COMPLETE_WITH"))==2
 
           # Verify the exact frozen values most likely to be accidentally mistyped.
           assert pd_rows[0][1]==16460 and math.isclose(pd_rows[0][2],0.2248951159524824)
