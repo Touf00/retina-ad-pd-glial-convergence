@@ -1,0 +1,76 @@
+name: ChatGPT clustering dependency drift audit
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-clustering-dependency-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install current archival environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Compare clustering dependency versions to versions available by 2026-09-14
+        run: |
+          python - <<'PY'
+          import json, importlib.metadata as im
+          from datetime import datetime, timezone
+          from urllib.request import urlopen
+          from packaging.version import Version, InvalidVersion
+
+          packages=[
+            "umap-learn","pynndescent","scikit-learn","numba","llvmlite",
+            "networkx","joblib","threadpoolctl","python-igraph","igraph","leidenalg"
+          ]
+          cutoff=datetime(2026,9,14,23,59,59,tzinfo=timezone.utc)
+
+          def latest_by_cutoff(pkg):
+              data=json.load(urlopen(f"https://pypi.org/pypi/{pkg}/json"))
+              cand=[]
+              for ver,files in data.get("releases",{}).items():
+                  try: Version(ver)
+                  except InvalidVersion: continue
+                  times=[]
+                  for f in files:
+                      t=f.get("upload_time_iso_8601")
+                      if t:
+                          try: times.append(datetime.fromisoformat(t.replace("Z","+00:00")))
+                          except: pass
+                  if times and min(times)<=cutoff:
+                      cand.append((Version(ver),ver,min(times).isoformat()))
+              if not cand: return None
+              cand.sort()
+              return cand[-1]
+
+          rows=[]
+          for pkg in packages:
+              try: current=im.version(pkg)
+              except: current=None
+              hist=latest_by_cutoff(pkg)
+              rows.append({
+                  "package":pkg,
+                  "current_installed":current,
+                  "latest_available_by_2026_09_14": hist[1] if hist else None,
+                  "release_time": hist[2] if hist else None,
+                  "different": bool(current and hist and current!=hist[1]),
+              })
+          print(json.dumps(rows,indent=2))
+          open("/tmp/clustering_dependency_drift.json","w").write(json.dumps(rows,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clustering-dependency-drift
+          path: /tmp/clustering_dependency_drift.json
+          retention-days: 7
