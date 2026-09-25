@@ -25,6 +25,7 @@ jobs:
       NUMEXPR_NUM_THREADS: "1"
       BLIS_NUM_THREADS: "1"
       VECLIB_MAXIMUM_THREADS: "1"
+      NUMBA_NUM_THREADS: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -157,6 +158,7 @@ jobs:
             "thread_env":{name:os.environ.get(name) for name in [
               "OMP_NUM_THREADS","OPENBLAS_NUM_THREADS","MKL_NUM_THREADS",
               "NUMEXPR_NUM_THREADS","BLIS_NUM_THREADS","VECLIB_MAXIMUM_THREADS",
+              "NUMBA_NUM_THREADS",
             ]},
             "threadpools":threadpool_info(),
             "n_cells":int(len(obs)),
