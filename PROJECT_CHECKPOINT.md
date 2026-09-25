@@ -1,3 +1,11 @@
+### GSE157827 exact brute-force neighbors — CROSS-RUN DRIFT PERSISTS
+- Run 36177674976 completed successfully. Both jobs used the exact same frozen Harmony20 file, scikit-learn KNeighborsTransformer with algorithm=brute, Euclidean distance, n_jobs=1, and single-thread environment limits.
+- Replicate 1: distance SHA-256 1345c06daf735c66cf82af5a222dcb9fde22241c5be2f9dd5c3661dd53ca06a5; connectivity SHA-256 5c57d8a729630e7612a368718e71e9febbd896fed174d12d42c701fe1501e210; 30 clusters.
+- Replicate 2: distance SHA-256 138d8724a28e15272d95573901f8a2863919c94c6090974ed1529a1859100856; connectivity SHA-256 03c6ea6250c6b97ea2e549e0fcd665a77eb778e24bf371d9ee88c657b19e9cfe; 28 clusters.
+- Matching the archival cluster count in replicate 2 does NOT establish reproduction of the archival partition because the original 28-cluster cell assignments are not preserved for direct comparison.
+- Approximate-neighbor randomness is therefore not the whole explanation: even exact brute-force kNN differs across independent hosted runners.
+- Next controlled test: execute the exact brute-force neighbor+Leiden calculation twice sequentially inside one runner/process and record CPU/runtime information. If the two within-run hashes match, the remaining difference is cross-run host/numerical implementation state rather than algorithmic randomness within one process.
+
 ### GSE157827 explicit single-job PyNNDescent — STILL NONDETERMINISTIC
 - Run 36177321311 completed successfully using the exact same frozen Harmony20 file in two independent jobs, PyNNDescent random_state=20260914, n_jobs=1, and all common numerical/Numba thread pools capped at one.
 - Replicate 1: distance SHA-256 c46604dbccd3f31885c66626ae59e8c52ba2fbd30ca95fb37af5f7b3196d57ce; connectivity SHA-256 9e239ade64e8ff49fadb423b5eb3d63b34ce324571692ed2b2479238928966e0; 31 clusters.
