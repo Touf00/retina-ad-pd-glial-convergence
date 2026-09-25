@@ -28,7 +28,7 @@ jobs:
           urls=[
             "https://www.pnas.org/doi/suppl/10.1073/pnas.2008762117/suppl_file/pnas.2008762117.sd01.xlsx",
             "https://www.pnas.org/action/downloadSupplement?doi=10.1073%2Fpnas.2008762117&file=pnas.2008762117.sd01.xlsx",
-            "https://pmc.ncbi.nlm.nih.gov/articles/PMC7519289/bin/pnas.2008762117.sd01.xlsx"
+            "https://pmc.ncbi.nlm.nih.gov/articles/PMC7568283/bin/pnas.2008762117.sd01.xlsx"
           ]
           p=out/"pnas.2008762117.sd01.xlsx"
           for u in urls:
@@ -38,6 +38,18 @@ jobs:
               if r.ok and len(r.content)>10000 and r.content[:2]==b"PK":
                 p.write_bytes(r.content); break
             except Exception as e: print("ERR",u,e)
+          if not p.exists():
+            # Europe PMC supplementary bundle fallback.
+            z=requests.get("https://www.ebi.ac.uk/europepmc/webservices/rest/PMC7568283/supplementaryFiles",timeout=90)
+            print("EuropePMC",z.status_code,z.headers.get("content-type"),len(z.content))
+            if z.ok:
+              import zipfile,io
+              try:
+                zz=zipfile.ZipFile(io.BytesIO(z.content))
+                names=zz.namelist(); print("bundle names",names)
+                hit=[n for n in names if n.endswith("pnas.2008762117.sd01.xlsx")]
+                if hit: p.write_bytes(zz.read(hit[0]))
+              except Exception as e: print("bundle parse error",e)
           if not p.exists(): raise RuntimeError("Could not fetch sd01.xlsx")
           pat=pd.read_excel(p,sheet_name="Patient_info",dtype=object)
           qc=pd.read_excel(p,sheet_name="snRNAseq_QC",dtype=object)
