@@ -171,7 +171,7 @@ jobs:
           first=" | ".join(genes_tbl.iloc[0].fillna("").astype(str).tolist()).lower()
           if "row" in [str(x).strip().lower() for x in genes_tbl.iloc[0].tolist()] or any(k in first for k in ["gene_id","gene name","gene_name","symbol"]):
               genes_tbl=genes_tbl.iloc[1:].reset_index(drop=True)
-          gene_names=(genes_tbl.iloc[:,1] if genes_tbl.shape[1]>=2 else genes_tbl.iloc[:,0]).astype(str).tolist()
+          gene_names=genes_tbl.iloc[:,0].astype(str).tolist()
           umi=one(rp,"IPDCO_hg_midbrain_UMI.tsv")
           with open(umi,"rt",encoding="utf-8",buffering=1024*1024) as f:
               hdr=f.readline().rstrip("\r\n").split("\t")
