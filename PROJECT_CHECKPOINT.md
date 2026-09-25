@@ -151,3 +151,17 @@ Verified publication-facing results:
 Known reproducibility discrepancy: the regenerated global candidate-pathway map contains 69,296 records versus the archival notebook assertion of 69,297. The brittle global count gate was made diagnostic only so the downstream publication-facing Figure-5 checks could execute. Those downstream checks passed and Figure 5 completed. Do not erase this one-row discrepancy; retain it in provenance/QC documentation.
 
 This supersedes older checkpoint “Remaining work” items that were subsequently completed. The next major technical block is the final source-data completeness audit before workbook construction. Main branch and Zenodo remain unchanged.
+
+
+### 2026-09-26 checkpoint — final source-data completeness audit COMPLETE
+- Workflow run `36201798312` completed successfully; all audit steps passed.
+- Durable generated commit: `c44fc91` (`Complete final publication source-data audit`).
+- All 20 planned supplementary-workbook sheets now map to durable repository source data; missing source-data mappings: 0.
+- Added `publication/source_data/dataset_manifest.csv`, `analysis_provenance.csv`, `SOURCE_DATA_COMPLETENESS_AUDIT_v1.csv`, and the corresponding audit note.
+- Added durable original-replication source data: exact frozen PD, AD-primary and AD-secondary publication summaries; preserved GSE243639 PD-discovery, GSE157783 PD-replication and GSE174367 AD-discovery effect vectors from clean-room artifact 10864609217.
+- Added durable GSE157827 default-vs-exact clustering/effect sensitivity tables from run 36186876350 / artifact 10887965528.
+- Two source blocks remain complete-with-explicit-limitation rather than normalized away: (1) AD primary replication because the original executed 28-cluster cell partition is unavailable, and (2) candidate-pathway mapping because the regenerated global map has 69,296 rows versus archival assertion 69,297 although downstream Figure-5 checks passed.
+- PXD066087 remains excluded from quantitative human validation; vascular results remain exploratory; PXD040225 remains limited independent AD-retina support.
+- Publication source-data checksum index now contains 131 entries; source-data README updated to reflect the complete tree.
+- Main branch and Zenodo remain unchanged.
+- Next major technical block: build the supplementary publication workbook from these frozen source tables. Do not regenerate figures or rewrite manuscript text until the workbook passes source-to-sheet QC.
