@@ -1,3 +1,15 @@
+### Publication source-data preservation — cross-cohort matrix + independent bootstrap COMPLETE
+- Run 36191824900 completed successfully and committed exact durable source data at commit daf7db2d885066122fc8976452abeb6d91ba951b.
+- Preserved publication/source_data/glial_cross_cohort_matrix.csv (16 comparisons) and glial_cross_cohort_consistency_summary.csv.
+- Preserved all 16 matched gene-level compressed effect tables underlying the 2 x 2 matrix.
+- Preserved independent_pair_donor_bootstrap_summary.csv, independent_AD_PD_pair_summary.csv, all four B=500 bootstrap draw tables, all four merged independent-pair gene-effect tables, and summary.json.
+- Added publication/source_data/SHA256SUMS.txt and README.md with workflow/artifact provenance.
+- Automated verification passed exactly: 16 matrix rows, 4 bootstrap draw files with 500 draws each, and 16 cross-cohort gene-effect files. Frozen matrix and bootstrap-summary values matched PUBLICATION_RESULT_FREEZE_v1.md; no publication-value mismatch was found.
+- Important provenance distinction: the separately executed independent-pair pair-summary has its own permutation realization; its permutation P values are retained but must not overwrite the corresponding 2 x 2 matrix-run P values.
+- These publication source data no longer depend on the workflow artifacts expiring on 2026-10-02.
+- Main and Zenodo remain unchanged.
+- Stop point: this source-data preservation step is complete. Do not start workbook/figure/notebook generation until the next explicit step.
+
 ### GSE157827 clustering sensitivity propagated to AD replication — COMPLETE
 - Run 36186876350 completed successfully.
 - Both default-neighbor and exact-neighbor GSE157827 variants retained positive GSE174367 discovery-to-replication genome-wide concordance in all four glial classes; all LFC and Wald permutation tests were P=0.00009999.
