@@ -121,21 +121,23 @@ jobs:
               lines.append(f"{h}  {p.relative_to(root).as_posix()}")
           (root/"SHA256SUMS.txt").write_text("\n".join(lines)+"\n")
 
-          readme="""# Publication source data
-
-These files are durable copies of the exact outputs used for the publication-facing cross-cohort glial matrix and independent-pair donor-bootstrap robustness analysis.
-
-## Provenance
-
-- 2 x 2 AD-PD glial matrix: workflow run 36142383845, artifact 10868790506, artifact digest sha256:b8f249d4b2ce8fd306d053cb1bb2cbbe469bf817721b5e109093f23a9fc109a7.
-- Independent GSE222494 x GSE329625 donor bootstrap: workflow run 36135599890, artifact 10863442549, artifact digest sha256:d848e3e0390742999cf74f67c79608658c708f90a2c6f8a6d3cae980eb8ddf77.
-
-The 16-row matrix and four bootstrap summaries were verified numerically against PUBLICATION_RESULT_FREEZE_v1.md before commit. No frozen publication value mismatched.
-
-The independent-pair pair-summary permutation P values come from its own permutation realization and are not substituted for the corresponding values in the separately executed 2 x 2 matrix table. Bootstrap confidence intervals use B=500 donor-resampling iterations per cell class.
-
-The compressed gene-effect tables and all 500 bootstrap draws per cell class are retained here so publication figures and source-data tables no longer depend on expiring workflow artifacts.
-"""
+          readme="\\n".join([
+              "# Publication source data",
+              "",
+              "These files are durable copies of the exact outputs used for the publication-facing cross-cohort glial matrix and independent-pair donor-bootstrap robustness analysis.",
+              "",
+              "## Provenance",
+              "",
+              "- 2 x 2 AD-PD glial matrix: workflow run 36142383845, artifact 10868790506, artifact digest sha256:b8f249d4b2ce8fd306d053cb1bb2cbbe469bf817721b5e109093f23a9fc109a7.",
+              "- Independent GSE222494 x GSE329625 donor bootstrap: workflow run 36135599890, artifact 10863442549, artifact digest sha256:d848e3e0390742999cf74f67c79608658c708f90a2c6f8a6d3cae980eb8ddf77.",
+              "",
+              "The 16-row matrix and four bootstrap summaries were verified numerically against PUBLICATION_RESULT_FREEZE_v1.md before commit. No frozen publication value mismatched.",
+              "",
+              "The independent-pair pair-summary permutation P values come from its own permutation realization and are not substituted for the corresponding values in the separately executed 2 x 2 matrix table. Bootstrap confidence intervals use B=500 donor-resampling iterations per cell class.",
+              "",
+              "The compressed gene-effect tables and all 500 bootstrap draws per cell class are retained here so publication figures and source-data tables no longer depend on expiring workflow artifacts.",
+              "",
+          ])
           (root/"README.md").write_text(readme)
           PY
 
