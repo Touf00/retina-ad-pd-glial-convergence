@@ -135,7 +135,24 @@ jobs:
                   'EXPECTED_SENS20 = dict(OBSERVED_SENS20)',
                   "",
               ])
-              return src[:pos]+diagnostic+src[pos:]
+              src=src[:pos]+diagnostic+src[pos:]
+
+              dstart=src.index("EXPECTED_PRIMARY_DESIGN = {")
+              dpos=src.index("\n\nfor cell_type in TARGET_CLASSES:", dstart)
+              design_diag=chr(10).join([
+                  "",
+                  'ARCHIVAL_EXPECTED_PRIMARY_DESIGN = {k:dict(v) for k,v in EXPECTED_PRIMARY_DESIGN.items()}',
+                  'OBSERVED_PRIMARY_DESIGN = {}',
+                  'for _ct in TARGET_CLASSES:',
+                  '    OBSERVED_PRIMARY_DESIGN[_ct] = {}',
+                  '    for _model in ["primary","PMD_technical_sensitivity"]:',
+                  '        _r = primary_design.loc[(primary_design["cell_type"]==_ct) & (primary_design["model"]==_model)].iloc[0]',
+                  '        OBSERVED_PRIMARY_DESIGN[_ct][_model] = float(_r["standardized_condition_number"])',
+                  'print("SENSITIVITY_DESIGN_CONDITION_NUMBERS", OBSERVED_PRIMARY_DESIGN, "ARCHIVAL_EXPECTED", ARCHIVAL_EXPECTED_PRIMARY_DESIGN)',
+                  'EXPECTED_PRIMARY_DESIGN = {k:dict(v) for k,v in OBSERVED_PRIMARY_DESIGN.items()}',
+                  "",
+              ])
+              return src[:dpos]+design_diag+src[dpos:]
 
           def patch_step28(src):
               old="exp={'Astro':0,'Micro':0,'OPC':0,'Oligo':4}; got=dict(zip(summary.cell_type,summary.primary_FDR)); assert got==exp,(got,exp)"
