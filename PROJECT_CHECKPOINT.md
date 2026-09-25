@@ -4,6 +4,7 @@
 - Artifact 10879377749 was uploaded despite the extraction failure. Direct inspection of its cluster assignments recovered 169,506 cells and 29 clusters, with labels 0 through 28.
 - Therefore the historical-like Python 3.13 environment does NOT restore the archival 28-cluster result. It independently reproduces the recent 29-cluster focused rebuild.
 - The workflow was patched only to read and collect the lock from its actual path. A relaunch will verify the structured result and preserve the lock metadata; no analysis parameters were changed.
+- The relaunch artifact is privacy-minimized: it publishes only the aggregate result JSON and non-cell-level lock metadata, not cell-level assignments, the HVG list, or execution logs.
 - Next controlled question after verification: determine why nominally similar focused reconstructions have produced 29 versus 31, then document whether the archival 28 can be localized beyond an unarchived numerical/runtime state.
 
 ### GSE157827 HVG / normalization / PCA localization — COMPLETED
