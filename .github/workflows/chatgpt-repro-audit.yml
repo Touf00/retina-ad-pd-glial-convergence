@@ -71,21 +71,22 @@ jobs:
           done
 
           if [ ! -s "$OUT" ]; then
-            rm -rf /tmp/eupmc_supp /tmp/eupmc_supp.zip
-            mkdir -p /tmp/eupmc_supp
-            curl -fL --retry 3 --connect-timeout 30 "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC10720485/supplementaryFiles" -o /tmp/eupmc_supp.zip
-            unzip -q /tmp/eupmc_supp.zip -d /tmp/eupmc_supp
-            MATCH=""
-            while IFS= read -r -d "" F; do
-              GOT="$(sha256sum "$F" | awk '{print $1}')"
-              if [ "$GOT" = "$EXPECTED" ]; then
-                MATCH="$F"
-                break
+            curl -fsSL "https://www.ncbi.nlm.nih.gov/research/bionlp/RESTful/supplmat.cgi/BioC_JSON/PMC10720485/LIST" -o /tmp/wolf_supp_list.txt || true
+            echo "BioC supplementary listing:"
+            head -c 4000 /tmp/wolf_supp_list.txt || true
+            echo
+            for I in $(seq 1 12); do
+              CAND="/tmp/wolf_bioc_$I"
+              if curl -fL --retry 2 --connect-timeout 30 "https://www.ncbi.nlm.nih.gov/research/bionlp/RESTful/supplmat.cgi/BioC_JSON/PMC10720485/$I" -o "$CAND"; then
+                GOT="$(sha256sum "$CAND" | awk '{print $1}')"
+                echo "BioC supplement $I -> $GOT ($(wc -c < "$CAND") bytes)"
+                if [ "$GOT" = "$EXPECTED" ]; then
+                  cp "$CAND" "$OUT"
+                  echo "Matched exact Wolf resource via BioC supplement $I"
+                  break
+                fi
               fi
-            done < <(find /tmp/eupmc_supp -type f -print0)
-            test -n "$MATCH"
-            cp "$MATCH" "$OUT"
-            echo "Matched exact Wolf resource: $MATCH"
+            done
           fi
 
           echo "$EXPECTED  $OUT" | sha256sum -c -
