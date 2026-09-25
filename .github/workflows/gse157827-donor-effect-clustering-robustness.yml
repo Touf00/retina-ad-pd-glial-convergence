@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   donor-effect-robustness:
@@ -37,6 +38,14 @@ jobs:
             anndata==0.13.3.post0 scanpy==1.12.4 scikit-learn==1.6.1 \
             scikit-misc==0.5.2 harmonypy==2.0.0 leidenalg==0.12.0 igraph==1.0.0 \
             pydeseq2==0.5.4 requests openpyxl h5py pypdf matplotlib gseapy nbconvert jupyter
+
+      - name: Download frozen AD discovery effects
+        uses: actions/download-artifact@v5
+        with:
+          name: retina-nd-clean-room-audit
+          path: /tmp/reference
+          run-id: 36144781563
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build matched default and exact-neighbor notebooks
         run: |
@@ -368,6 +377,99 @@ jobs:
           count_comp.to_csv("/tmp/cell_count_robustness.csv",index=False)
           PY
 
+      - name: Compare AD discovery-to-replication robustness
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import numpy as np
+          import pandas as pd
+          from scipy.stats import spearmanr, binomtest
+
+          disc_hits=list(Path("/tmp/reference").rglob("GSE174367_AD_DISCOVERY_ALL_EFFECTS_LONG_v1.csv.gz"))
+          if len(disc_hits)!=1:
+              raise RuntimeError(f"Expected one frozen discovery table, found {disc_hits}")
+          D=pd.read_csv(disc_hits[0],compression="gzip",low_memory=False).rename(columns={
+              "AD_vs_Control_log2FC":"log2FoldChange",
+              "AD_vs_Control_Wald":"stat",
+              "AD_vs_Control_pvalue":"pvalue",
+              "AD_vs_Control_padj":"padj",
+          })
+          roots={"default":Path("/tmp/gse157827_default"),"exact":Path("/tmp/gse157827_exact")}
+          classes=["Astro","Micro","OPC","Oligo"]
+
+          def one(root,name):
+              hits=list(root.rglob(name))
+              if len(hits)!=1:
+                  raise RuntimeError(f"{root}: {name}: {hits}")
+              return hits[0]
+
+          def unique_symbols(x):
+              x=x.copy()
+              x["gene_symbol"]=x["gene_symbol"].astype(str).str.upper().str.strip()
+              return x.loc[~x["gene_symbol"].duplicated(keep=False)].copy()
+
+          def perm_positive(x,y,seed,n=10000):
+              mask=np.isfinite(x)&np.isfinite(y)
+              x=np.asarray(x)[mask]; y=np.asarray(y)[mask]
+              obs=float(spearmanr(x,y).statistic)
+              rng=np.random.default_rng(seed)
+              ge=0
+              for _ in range(n):
+                  p=float(spearmanr(x,rng.permutation(y)).statistic)
+                  if np.isfinite(p) and p>=obs: ge+=1
+              return obs,float((ge+1)/(n+1)),int(len(x))
+
+          rows=[]
+          for vix,(variant,root) in enumerate(roots.items()):
+              R=pd.read_csv(one(root,"GSE157827_AD_REPLICATION_PRIMARY_ALL_EFFECTS_LONG_v1.csv.gz"),compression="gzip",low_memory=False)
+              for cix,ct in enumerate(classes):
+                  d=unique_symbols(D.loc[D.cell_type.astype(str)==ct])
+                  r=unique_symbols(R.loc[R.cell_type.astype(str)==ct])
+                  m=d[["gene_symbol","log2FoldChange","stat","pvalue","padj"]].rename(columns={
+                      "log2FoldChange":"lfc_disc","stat":"wald_disc","pvalue":"p_disc","padj":"padj_disc"
+                  }).merge(
+                      r[["gene_symbol","log2FoldChange","stat","pvalue","padj"]].rename(columns={
+                          "log2FoldChange":"lfc_rep","stat":"wald_rep","pvalue":"p_rep","padj":"padj_rep"
+                      }),
+                      on="gene_symbol",how="inner",validate="one_to_one"
+                  )
+                  lfc_rho,lfc_p,n_lfc=perm_positive(
+                      pd.to_numeric(m.lfc_disc,errors="coerce").to_numpy(float),
+                      pd.to_numeric(m.lfc_rep,errors="coerce").to_numpy(float),
+                      20260914+cix,
+                  )
+                  wald_rho,wald_p,n_wald=perm_positive(
+                      pd.to_numeric(m.wald_disc,errors="coerce").to_numpy(float),
+                      pd.to_numeric(m.wald_rep,errors="coerce").to_numpy(float),
+                      20261914+cix,
+                  )
+                  dl=pd.to_numeric(m.lfc_disc,errors="coerce").to_numpy(float)
+                  rl=pd.to_numeric(m.lfc_rep,errors="coerce").to_numpy(float)
+                  finite=np.isfinite(dl)&np.isfinite(rl)
+                  direction=float(np.mean(np.sign(dl[finite])==np.sign(rl[finite])))
+                  pdadj=pd.to_numeric(m.padj_disc,errors="coerce").to_numpy(float)
+                  rp=pd.to_numeric(m.p_rep,errors="coerce").to_numpy(float)
+                  hits=np.isfinite(pdadj)&(pdadj<0.05)&finite
+                  n_hits=int(hits.sum())
+                  same=int((np.sign(dl[hits])==np.sign(rl[hits])).sum()) if n_hits else 0
+                  success=int(((np.sign(dl[hits])==np.sign(rl[hits])) & np.isfinite(rp[hits]) & (rp[hits]<0.05)).sum()) if n_hits else 0
+                  binom_p=float(binomtest(same,n_hits,p=.5,alternative="greater").pvalue) if n_hits else None
+                  rows.append({
+                      "variant":variant,"cell_type":ct,"matched_unique_genes":int(len(m)),
+                      "LFC_spearman":lfc_rho,"LFC_perm_p":lfc_p,"finite_LFC_pairs":n_lfc,
+                      "Wald_spearman":wald_rho,"Wald_perm_p":wald_p,"finite_Wald_pairs":n_wald,
+                      "all_gene_direction_concordance":direction,
+                      "discovery_FDR_measurable":n_hits,"same_direction_hits":same,
+                      "gene_level_replication_success":success,"direction_binomial_p":binom_p,
+                  })
+
+          out=pd.DataFrame(rows)
+          print("AD_REPLICATION_CLUSTERING_SENSITIVITY",json.dumps(out.to_dict("records"),indent=2))
+          Path("/tmp/ad_replication_clustering_sensitivity.json").write_text(json.dumps(out.to_dict("records"),indent=2))
+          out.to_csv("/tmp/ad_replication_clustering_sensitivity.csv",index=False)
+          PY
+
       - name: Upload aggregate robustness outputs
         if: always()
         uses: actions/upload-artifact@v4
@@ -377,6 +479,8 @@ jobs:
             /tmp/donor_effect_robustness.json
             /tmp/donor_effect_robustness.csv
             /tmp/cell_count_robustness.csv
+            /tmp/ad_replication_clustering_sensitivity.json
+            /tmp/ad_replication_clustering_sensitivity.csv
             /tmp/default.log
             /tmp/exact.log
           retention-days: 7
