@@ -1,0 +1,14 @@
+section,comparison,cell_class,n_genes,rho,sign_agreement,permutation_p,bootstrap_B,bootstrap_median_rho,bootstrap_ci2_5,bootstrap_ci97_5
+comparison_summary,AD_replication_Endothelial,Endothelial,570.0,0.11181071494121,0.5140350877192983,0.007998400319936,,,,
+comparison_summary,AD_replication_Pericyte,Pericyte,724.0,0.1167905366681185,0.5428176795580111,0.0017996400719856,,,,
+comparison_summary,PD_replication_Endothelial,Endothelial,5876.0,-0.0019668723954843,0.497787610619469,0.8834233153369326,,,,
+comparison_summary,Cross_Endo_AD174_PD243,Endothelial,570.0,0.0965672408964016,0.5385964912280702,0.0225954809038192,,,,
+comparison_summary,Cross_Endo_AD174_PD157,Endothelial,568.0,0.0542894809460813,0.5193661971830986,0.2003599280143971,,,,
+comparison_summary,Cross_Endo_AD222_PD243,Endothelial,6379.0,0.1720266643568579,0.5583947327167268,0.0001999600079984,,,,
+comparison_summary,Cross_Endo_AD222_PD157,Endothelial,5412.0,0.2006655024445045,0.5685513673318552,0.0001999600079984,,,,
+comparison_summary,Cross_Pericyte_AD174_PD157,Pericyte,771.0,0.0737727061954396,0.5330739299610895,0.042991401719656,,,,
+comparison_summary,Cross_Pericyte_AD222_PD157,Pericyte,1436.0,0.2039181520110902,0.5605849582172702,0.0001999600079984,,,,
+endothelial_bootstrap,Cross_Endo_AD174_PD243,Endothelial,,,,,300.0,0.0495461504555018,-0.1249641483725873,0.2093697182978806
+endothelial_bootstrap,Cross_Endo_AD174_PD157,Endothelial,,,,,300.0,0.0322492463077626,-0.1799927256699083,0.2629912865856202
+endothelial_bootstrap,Cross_Endo_AD222_PD243,Endothelial,,,,,300.0,0.1181394051588179,-0.0538447161775681,0.264553435919127
+endothelial_bootstrap,Cross_Endo_AD222_PD157,Endothelial,,,,,300.0,0.1306587635961898,-0.0285664938319685,0.2650255904897894
