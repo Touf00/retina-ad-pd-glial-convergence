@@ -1,0 +1,47 @@
+name: Build publication Figure 2
+
+on:
+  push:
+    branches: [reproducibility-audit]
+    paths:
+      - "publication/code/make_figure2_cross_cohort.py"
+      - ".github/workflows/build-publication-figure2.yml"
+      - "publication/source_data/glial_cross_cohort_matrix.csv"
+      - "publication/source_data/independent_pair_donor_bootstrap_summary.csv"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: reproducibility-audit
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install plotting dependencies
+        run: python -m pip install --upgrade pip pandas numpy matplotlib
+
+      - name: Build Figure 2
+        run: python publication/code/make_figure2_cross_cohort.py
+
+      - name: Commit generated Figure 2 outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add publication/figures/main/Figure_2_cross_cohort_variability.png
+          git add publication/figures/main/Figure_2_cross_cohort_variability.pdf
+          git add publication/source_data/figure_source_data/Figure_2_cross_cohort_variability_source_data.csv
+          if git diff --cached --quiet; then
+            echo "No Figure 2 changes to commit."
+          else
+            git commit -m "Generate publication Figure 2 [skip ci]"
+            git push origin HEAD:reproducibility-audit
+          fi
