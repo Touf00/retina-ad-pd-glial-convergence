@@ -183,7 +183,7 @@ fig.canvas.draw()
 for label, ax in zip(["A", "B", "C"], [ax1, ax2, ax3]):
     pos = ax.get_position()
     fig.text(
-        pos.x0 - 0.035, pos.y1 + 0.045, label,
+        pos.x0 - 0.030, pos.y1 + 0.105, label,
         fontsize=14, fontweight="bold", ha="right", va="center"
     )
 
