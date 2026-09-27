@@ -117,8 +117,6 @@ for spine in ax1.spines.values():
     spine.set_visible(False)
 cbar1 = fig.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
 cbar1.set_label("Spearman rho", rotation=90)
-ax1.text(-0.18, 1.04, "A", transform=ax1.transAxes,
-         fontsize=14, fontweight="bold", va="bottom", ha="right")
 
 # Panel B: same-direction gene fraction, centered at the 50% null expectation
 ax2 = fig.add_subplot(gs[0, 1])
@@ -140,8 +138,6 @@ for spine in ax2.spines.values():
     spine.set_visible(False)
 cbar2 = fig.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
 cbar2.set_label("Genes with matching direction (%)", rotation=90)
-ax2.text(-0.13, 1.04, "B", transform=ax2.transAxes,
-         fontsize=14, fontweight="bold", va="bottom", ha="right")
 
 # Panel C: donor bootstrap for the fully external cohort pair
 ax3 = fig.add_subplot(gs[0, 2])
@@ -174,8 +170,6 @@ for yy, m, l, h in zip(y, med, lo, hi):
 
 ax3.spines["top"].set_visible(False)
 ax3.spines["right"].set_visible(False)
-ax3.text(-0.16, 1.04, "C", transform=ax3.transAxes,
-         fontsize=14, fontweight="bold", va="bottom", ha="right")
 
 fig.suptitle(
     "Cross-cohort variability of AD-PD glial effect-vector alignment",
@@ -183,6 +177,15 @@ fig.suptitle(
 )
 
 fig.subplots_adjust(left=0.20, right=0.90, top=0.80, bottom=0.20)
+
+# Panel letters are positioned in figure coordinates to avoid title overlap.
+fig.canvas.draw()
+for label, ax in zip(["A", "B", "C"], [ax1, ax2, ax3]):
+    pos = ax.get_position()
+    fig.text(
+        pos.x0 - 0.035, pos.y1 + 0.045, label,
+        fontsize=14, fontweight="bold", ha="right", va="center"
+    )
 
 png = OUT_FIG / "Figure_2_cross_cohort_variability.png"
 pdf = OUT_FIG / "Figure_2_cross_cohort_variability.pdf"
