@@ -1,0 +1,47 @@
+name: Build publication Figure S5
+
+on:
+  push:
+    branches: [reproducibility-audit]
+    paths:
+      - "publication/code/make_figureS5_vascular.py"
+      - ".github/workflows/build-publication-figureS5.yml"
+      - "publication/source_data/vascular/vascular_comparison_summary.csv"
+      - "publication/source_data/vascular/vascular_endothelial_bootstrap_summary.csv"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: reproducibility-audit
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip pandas numpy matplotlib
+
+      - name: Build Figure S5
+        run: python publication/code/make_figureS5_vascular.py
+
+      - name: Commit Figure S5
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add publication/figures/supplementary/Figure_S5_exploratory_vascular_analysis.png
+          git add publication/figures/supplementary/Figure_S5_exploratory_vascular_analysis.pdf
+          git add publication/source_data/figure_source_data/Figure_S5_exploratory_vascular_source_data.csv
+          if git diff --cached --quiet; then
+            echo "No Figure S5 changes to commit."
+          else
+            git commit -m "Generate publication Figure S5 [skip ci]"
+            git push origin HEAD:reproducibility-audit
+          fi
