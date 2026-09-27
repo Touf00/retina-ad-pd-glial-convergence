@@ -1,0 +1,145 @@
+name: ChatGPT external pair robustness
+
+on:
+  push:
+    branches: [chatgpt-repro-audit]
+    paths:
+      - ".github/workflows/chatgpt-external-pair-robustness.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  robustness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install pandas numpy scipy
+      - name: Download frozen external-cohort artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/extartifact
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/10843939879/zip" \
+            -o /tmp/ext.zip
+          unzip -q /tmp/ext.zip -d /tmp/extartifact
+          find /tmp/extartifact -maxdepth 3 -type f | sed -n '1,120p'
+      - name: Cross-disease independent pairing and donor bootstrap
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import numpy as np, pandas as pd
+          from scipy.stats import spearmanr
+          root=Path("/tmp/extartifact")
+          out=Path("/tmp/external_pair_robustness"); out.mkdir(exist_ok=True)
+          rng=np.random.default_rng(20260925)
+
+          def one(name):
+              hits=list(root.rglob(name))
+              if len(hits)!=1: raise RuntimeError((name,[str(x) for x in hits]))
+              return hits[0]
+
+          cts=["Astro","Micro","OPC","Oligo"]
+          rows=[]
+          merged_by_ct={}
+          for ct in cts:
+              pdx=pd.read_csv(one(f"GSE329625_{ct}_effects.csv.gz"))[["gene","effect_log2cpm_ols"]].rename(columns={"effect_log2cpm_ols":"PD_effect"})
+              adx=pd.read_csv(one(f"GSE222494_{ct}_effects.csv.gz"))[["gene","effect_log2cpm_ols"]].rename(columns={"effect_log2cpm_ols":"AD_effect"})
+              m=adx.merge(pdx,on="gene",how="inner").dropna()
+              rho,p=spearmanr(m.AD_effect,m.PD_effect)
+              agree=float((np.sign(m.AD_effect)==np.sign(m.PD_effect)).mean())
+              # gene-label permutation null, 10,000 permutations
+              obs=float(rho); null=np.empty(10000)
+              arr=m.PD_effect.to_numpy(); a=m.AD_effect.to_numpy()
+              for i in range(10000):
+                  null[i]=spearmanr(a,rng.permutation(arr)).statistic
+              emp=(1+np.sum(np.abs(null)>=abs(obs)))/(1+len(null))
+              rows.append({"cell_class":ct,"n_genes":len(m),"rho":obs,"spearman_p":float(p),
+                           "sign_agreement":agree,"perm_empirical_p_two_sided":float(emp),
+                           "null_mean":float(np.nanmean(null)),"null_sd":float(np.nanstd(null))})
+              m.to_csv(out/f"independent_AD_PD_{ct}_merged_effects.csv.gz",index=False,compression="gzip")
+              merged_by_ct[ct]=m
+          pd.DataFrame(rows).to_csv(out/"independent_AD_PD_pair_summary.csv",index=False)
+
+          # Reconstruct donor metadata for bootstrap re-fitting.
+          m329=pd.read_csv(one("GSE329625_full_metadata.csv.gz"))
+          m329["diagnosis"]=np.where(m329["Disease"].eq("CTR"),0,np.where(m329["Disease"].isin(["PD_B3-4","PD_B5-6"]),1,np.nan))
+          m329=m329[m329.diagnosis.notna()].copy()
+          m222=pd.read_csv(one("GSE222494_metadata.csv.gz"),low_memory=False)
+          m222=m222[m222["Diagnosis"].isin(["Control","Sporadic"])].copy()
+          m222["diagnosis"]=m222["Diagnosis"].map({"Control":0,"Sporadic":1})
+
+          def donor_meta_329(ct, donor_cols):
+              d=(m329[m329["CellType"].map({"Astrocyte":"Astro","Microglia":"Microglia","OPC":"OPC","ODC":"Oligo"}).replace({"Microglia":"Micro"}).eq(ct)]
+                 .drop_duplicates("Sample_v2").set_index("Sample_v2"))
+              return pd.DataFrame(index=donor_cols,data={
+                 "diagnosis":[int(d.loc[x,"diagnosis"]) for x in donor_cols],
+                 "sex":[d.loc[x,"Sex"] for x in donor_cols]})
+          def donor_meta_222(ct, donor_cols):
+              cmap={"Astrocytes":"Astro","Microglia":"Micro","OPCs":"OPC","Oligodendrocytes":"Oligo"}
+              d=(m222[m222["Cluster.id"].map(cmap).eq(ct)].drop_duplicates("Patient").set_index("Patient"))
+              return pd.DataFrame(index=donor_cols,data={
+                "diagnosis":[int(d.loc[x,"diagnosis"]) for x in donor_cols],
+                "sex":[d.loc[x,"Sex"] for x in donor_cols],
+                "age":[float(d.loc[x,"AAD"]) for x in donor_cols]})
+
+          def effect_from_resample(pb, dm, sampled, age=False):
+              # sampled is list with duplicates; columns are extracted positionally and renamed
+              x=pb[sampled].copy()
+              x.columns=[f"s{i}" for i in range(len(sampled))]
+              libs=x.sum(axis=0).astype(float)
+              cpm=(x+0.5).div(libs+0.5*x.shape[0],axis=1)*1e6
+              y=np.log2(cpm+0.5).T.to_numpy()
+              dd=dm.loc[sampled].copy().reset_index(drop=True)
+              cols=[np.ones(len(dd)),dd.diagnosis.astype(float).to_numpy()]
+              if age:
+                  av=pd.to_numeric(dd.age).to_numpy(float); av=(av-av.mean())/(av.std() or 1); cols.append(av)
+              s=dd.sex.astype(str).str.upper().map({"M":1.0,"MALE":1.0,"F":0.0,"FEMALE":0.0})
+              if s.notna().all() and s.nunique()>1: cols.append(s.to_numpy())
+              X=np.column_stack(cols)
+              return pd.Series((np.linalg.pinv(X)@y)[1],index=pb.index)
+
+          boot_rows=[]
+          B=500
+          for ct in cts:
+              pbpd=pd.read_csv(one(f"GSE329625_{ct}_pseudobulk.csv.gz"),index_col=0)
+              pbad=pd.read_csv(one(f"GSE222494_{ct}_pseudobulk.csv.gz"),index_col=0)
+              dm_pd=donor_meta_329(ct,pbpd.columns.tolist())
+              dm_ad=donor_meta_222(ct,pbad.columns.tolist())
+              pd0=dm_pd.index[dm_pd.diagnosis.eq(0)].tolist(); pd1=dm_pd.index[dm_pd.diagnosis.eq(1)].tolist()
+              ad0=dm_ad.index[dm_ad.diagnosis.eq(0)].tolist(); ad1=dm_ad.index[dm_ad.diagnosis.eq(1)].tolist()
+              rhos=[]
+              for b in range(B):
+                  spd=list(rng.choice(pd0,len(pd0),replace=True))+list(rng.choice(pd1,len(pd1),replace=True))
+                  sad=list(rng.choice(ad0,len(ad0),replace=True))+list(rng.choice(ad1,len(ad1),replace=True))
+                  ep=effect_from_resample(pbpd,dm_pd,spd,age=False)
+                  ea=effect_from_resample(pbad,dm_ad,sad,age=True)
+                  mm=pd.concat([ea.rename("AD"),ep.rename("PD")],axis=1,join="inner").dropna()
+                  rhos.append(float(spearmanr(mm.AD,mm.PD).statistic))
+              r=np.asarray(rhos)
+              boot_rows.append({"cell_class":ct,"B":B,"median_rho":float(np.nanmedian(r)),
+                                "ci2_5":float(np.nanpercentile(r,2.5)),"ci97_5":float(np.nanpercentile(r,97.5)),
+                                "fraction_rho_gt0":float(np.mean(r>0))})
+              pd.DataFrame({"bootstrap_rho":r}).to_csv(out/f"bootstrap_{ct}.csv",index=False)
+          pd.DataFrame(boot_rows).to_csv(out/"independent_pair_donor_bootstrap_summary.csv",index=False)
+          summary={"pair_summary":rows,"bootstrap_summary":boot_rows,
+                   "note":"GSE222494 sporadic AD vs control paired with GSE329625 established PD (Braak 3-6) vs CTR; independent of original discovery pair."}
+          (out/"summary.json").write_text(json.dumps(summary,indent=2))
+          print(json.dumps(summary,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: external-pair-robustness
+          path: /tmp/external_pair_robustness/
+          retention-days: 7
