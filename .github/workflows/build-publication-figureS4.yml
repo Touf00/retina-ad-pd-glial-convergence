@@ -1,0 +1,47 @@
+name: Build publication Figure S4
+
+on:
+  push:
+    branches: [reproducibility-audit]
+    paths:
+      - "publication/code/make_figureS4_discovery_pair.py"
+      - ".github/workflows/build-publication-figureS4.yml"
+      - "publication/source_data/cross_cohort_gene_effects/AD174__PD243__*.csv.gz"
+      - "publication/source_data/glial_cross_cohort_matrix.csv"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: reproducibility-audit
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip pandas numpy scipy matplotlib
+
+      - name: Build Figure S4
+        run: python publication/code/make_figureS4_discovery_pair.py
+
+      - name: Commit Figure S4
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add publication/figures/supplementary/Figure_S4_discovery_pair_gene_effect_concordance.png
+          git add publication/figures/supplementary/Figure_S4_discovery_pair_gene_effect_concordance.pdf
+          git add publication/source_data/figure_source_data/Figure_S4_discovery_pair_gene_effect_concordance_manifest.csv
+          if git diff --cached --quiet; then
+            echo "No Figure S4 changes to commit."
+          else
+            git commit -m "Generate publication Figure S4 [skip ci]"
+            git push origin HEAD:reproducibility-audit
+          fi
